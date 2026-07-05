@@ -1,4 +1,4 @@
-enum AttendanceStatus { hadir, sakit, izin, alfa, none }
+enum AttendanceStatus { hadir, terlambat, sakit, izin, alpa, none }
 
 class AttendanceRecord {
   const AttendanceRecord({
@@ -10,13 +10,14 @@ class AttendanceRecord {
 
   final DateTime date;
   final AttendanceStatus status;
-  final DateTime? checkInTime; // only if status is hadir
-  final String? remarks; // e.g., 'Surat Dokter' for sakit, 'Acara Keluarga' for izin
+  final DateTime? checkInTime; // only if status is hadir or terlambat
+  final String? remarks; // e.g., 'Surat Dokter' for sakit, 'Acara Keluarga' for izin, or late description
 
   bool get isHadir => status == AttendanceStatus.hadir;
+  bool get isTerlambat => status == AttendanceStatus.terlambat;
   bool get isSakit => status == AttendanceStatus.sakit;
   bool get isIzin => status == AttendanceStatus.izin;
-  bool get isAlfa => status == AttendanceStatus.alfa;
+  bool get isAlpa => status == AttendanceStatus.alpa;
 
   AttendanceRecord copyWith({
     DateTime? date,

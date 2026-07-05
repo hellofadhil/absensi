@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/repositories/attendance_repository_impl.dart';
@@ -34,3 +36,39 @@ final attendanceHistoryProvider = FutureProvider<List<AttendanceRecord>>((ref) a
   final repo = ref.watch(attendanceRepositoryProvider);
   return repo.getAttendanceHistory(authState.user.uid, selectedMonth);
 });
+
+// Notifier for manual attendance submission
+class AttendanceSubmissionNotifier extends Notifier<AsyncValue<void>> {
+  @override
+  AsyncValue<void> build() {
+    return const AsyncData(null); // Idle state
+  }
+
+  Future<bool> submit(AttendanceRecord record) async {
+    final authState = ref.read(authProvider);
+    if (authState is! Authenticated) {
+      state = AsyncError('Pengguna tidak terautentikasi', StackTrace.current);
+      return false;
+    }
+
+    state = const AsyncLoading();
+    try {
+      final repo = ref.read(attendanceRepositoryProvider);
+      await repo.submitAttendance(authState.user.uid, record);
+      state = const AsyncData(null);
+      
+      // Invalidate both history and any dependent providers
+      ref.invalidate(attendanceHistoryProvider);
+      return true;
+    } catch (e, stack) {
+      state = AsyncError(e, stack);
+      return false;
+    }
+  }
+}
+
+final attendanceSubmissionProvider = NotifierProvider<AttendanceSubmissionNotifier, AsyncValue<void>>(
+  AttendanceSubmissionNotifier.new,
+);
+
+

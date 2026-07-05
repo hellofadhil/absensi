@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../features/attendance/presentation/pages/attendance_history_page.dart';
 import '../../features/auth/presentation/pages/auth_gate.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
-import '../../features/home/presentation/pages/home_page.dart';
 import 'route_names.dart';
 
 abstract final class AppRouter {

@@ -1,9 +1,8 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:absensi/core/router/route_names.dart';
+import 'package:absensi/features/attendance/presentation/widgets/manual_attendance_bottom_sheet.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -27,61 +26,6 @@ class HomePage extends ConsumerWidget {
       topBar: AppTopBar(
         title: 'Absensi Sekolah',
         onHomePressed: () {},
-        actions: [
-          IconButton(
-            icon: Icon(Icons.logout_rounded, color: context.appColors.danger),
-            tooltip: 'Keluar Akun',
-            onPressed: () {
-              showGeneralDialog<void>(
-                context: context,
-                barrierDismissible: true,
-                barrierLabel: 'Keluar',
-                barrierColor: Colors.black.withValues(alpha: 0.4),
-                transitionDuration: const Duration(milliseconds: 240),
-                pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
-                transitionBuilder: (context, anim, anim2, child) {
-                  return BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
-                    child: FadeTransition(
-                      opacity: anim,
-                      child: ScaleTransition(
-                        scale: Tween<double>(begin: 0.92, end: 1.0).animate(
-                          CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
-                        ),
-                        child: AlertDialog(
-                          title: const Text('Keluar Akun'),
-                          content: const Text('Apakah Anda yakin ingin keluar dari akun Anda?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: Text(
-                                'Batal',
-                                style: TextStyle(color: context.appColors.textSecondary),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                ref.read(authProvider.notifier).logout();
-                              },
-                              child: Text(
-                                'Keluar',
-                                style: TextStyle(
-                                  color: context.appColors.danger,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ],
       ),
       bottomNavigationBar: AppBottomNavBar(
         selectedDestination: AppBottomDestination.home,
@@ -114,7 +58,7 @@ class HomePage extends ConsumerWidget {
               description: 'Pertahankan kehadiran Anda untuk tetap di atas batas minimum sekolah (85%).',
               progress: 0.9,
               actionLabel: 'Lakukan Presensi Sekarang',
-              onPressed: () => _showComingSoon(context, 'Presensi'),
+              onPressed: () => ManualAttendanceBottomSheet.show(context),
             ),
             const SizedBox(height: AppSpacing.md),
             const _AttendanceStatsCard(),
@@ -178,6 +122,11 @@ class HomePage extends ConsumerWidget {
       return;
     }
 
+    if (destination == AppBottomDestination.scan) {
+      ManualAttendanceBottomSheet.show(context);
+      return;
+    }
+
     final label = switch (destination) {
       AppBottomDestination.home => 'Beranda',
       AppBottomDestination.calendar => 'Jadwal',
@@ -187,6 +136,7 @@ class HomePage extends ConsumerWidget {
     };
     _showComingSoon(context, label);
   }
+
 
   void _showComingSoon(BuildContext context, String label) {
     ScaffoldMessenger.of(context)
@@ -229,7 +179,7 @@ class _AttendanceStatsCard extends StatelessWidget {
           _DailyStat(
             icon: Icons.cancel_rounded,
             value: '0 Hari',
-            label: 'Alfa',
+            label: 'Alpa',
             isDanger: true,
           ),
         ],

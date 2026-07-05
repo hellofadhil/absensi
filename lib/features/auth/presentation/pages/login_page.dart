@@ -6,7 +6,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_button.dart';
-import '../../../../shared/widgets/app_card.dart';
 import '../../../../shared/widgets/app_scaffold.dart';
 import '../providers/auth_provider.dart';
 
@@ -52,54 +51,57 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     });
 
     return AppScaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo & App Name Header
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: context.appColors.primarySoft,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: context.appColors.primaryBorder,
-                    width: 2,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Logo & App Name Header
+                Center(
+                  child: Container(
+                    width: 88,
+                    height: 88,
+                    decoration: BoxDecoration(
+                      color: context.appColors.primarySoft,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: context.appColors.primaryBorder,
+                        width: 2.5,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.school_rounded,
+                      size: 44,
+                      color: context.appColors.primary,
+                    ),
                   ),
                 ),
-                child: Icon(
-                  Icons.school_rounded,
-                  size: 40,
-                  color: context.appColors.primary,
+                const SizedBox(height: AppSpacing.xl),
+                Text(
+                  'Presensi Sekolah',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineMedium!.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                        color: context.appColors.textPrimary,
+                      ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Presensi Sekolah',
-                style: Theme.of(context).textTheme.headlineMedium!.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: context.appColors.textPrimary,
-                    ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Masuk untuk mencatat kehadiran Anda',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                      color: context.appColors.textSecondary,
-                    ),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Masuk untuk mencatat kehadiran Anda hari ini',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                        color: context.appColors.textSecondary,
+                      ),
+                ),
+                const SizedBox(height: AppSpacing.xxl),
 
-              // Form Card
-              Form(
-                key: _formKey,
-                child: AppCard(
-                  showShadow: true,
-                  padding: const EdgeInsets.all(AppSpacing.xl),
+                Form(
+                  key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -112,7 +114,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             color: context.appColors.dangerSoft,
                             borderRadius: BorderRadius.circular(AppRadius.small),
                             border: Border.all(
-                              color: context.appColors.danger.withValues(alpha: 0.3),
+                              color: context.appColors.danger.withValues(alpha: 0.25),
                             ),
                           ),
                           child: Row(
@@ -120,7 +122,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               Icon(
                                 Icons.error_outline_rounded,
                                 color: context.appColors.danger,
-                                size: 20,
+                                size: 22,
                               ),
                               const SizedBox(width: AppSpacing.sm),
                               Expanded(
@@ -138,26 +140,42 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.md),
+                        const SizedBox(height: AppSpacing.lg),
                       ],
 
                       // Email Field
-                      Text(
-                        'Alamat Email',
-                        style: Theme.of(context).textTheme.labelLarge!.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: context.appColors.textPrimary,
-                            ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
                         enabled: !isLoading,
-                        decoration: const InputDecoration(
-                          hintText: 'contoh: siswa@sekolah.com',
-                          prefixIcon: Icon(Icons.email_outlined),
+                        style: TextStyle(color: context.appColors.textPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'Email Address',
+                          prefixIcon: Icon(
+                            Icons.email_outlined,
+                            color: context.appColors.textSecondary,
+                          ),
+                          filled: true,
+                          fillColor: context.appColors.surfaceSoft.withValues(alpha: 0.5),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.md,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.small),
+                            borderSide: BorderSide(
+                              color: context.appColors.border,
+                              width: 1.5,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.small),
+                            borderSide: BorderSide(
+                              color: context.appColors.primary,
+                              width: 2.0,
+                            ),
+                          ),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
@@ -169,28 +187,45 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       const SizedBox(height: AppSpacing.lg),
 
                       // Password Field
-                      Text(
-                        'Kata Sandi',
-                        style: Theme.of(context).textTheme.labelLarge!.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: context.appColors.textPrimary,
-                            ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
                       TextFormField(
                         controller: _passwordController,
                         obscureText: _obscurePassword,
                         textInputAction: TextInputAction.done,
                         enabled: !isLoading,
                         onFieldSubmitted: (_) => _submit(),
+                        style: TextStyle(color: context.appColors.textPrimary),
                         decoration: InputDecoration(
-                          hintText: 'Masukkan kata sandi Anda',
-                          prefixIcon: const Icon(Icons.lock_outlined),
+                          hintText: 'Password',
+                          prefixIcon: Icon(
+                            Icons.lock_outlined,
+                            color: context.appColors.textSecondary,
+                          ),
+                          filled: true,
+                          fillColor: context.appColors.surfaceSoft.withValues(alpha: 0.5),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.md,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.small),
+                            borderSide: BorderSide(
+                              color: context.appColors.border,
+                              width: 1.5,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.small),
+                            borderSide: BorderSide(
+                              color: context.appColors.primary,
+                              width: 2.0,
+                            ),
+                          ),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscurePassword
                                   ? Icons.visibility_outlined
                                   : Icons.visibility_off_outlined,
+                              color: context.appColors.textSecondary,
                             ),
                             onPressed: () {
                               setState(() {
@@ -206,7 +241,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: AppSpacing.xl),
+                      const SizedBox(height: AppSpacing.xxl),
 
                       // Submit Button
                       if (isLoading)
@@ -217,16 +252,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           ),
                         )
                       else
-                        AppPrimaryButton(
-                          label: 'Masuk Ke Akun',
-                          onPressed: _submit,
-                          icon: Icons.login_rounded,
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: AppPrimaryButton(
+                            label: 'Masuk Ke Akun',
+                            onPressed: _submit,
+                            icon: Icons.login_rounded,
+                          ),
                         ),
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

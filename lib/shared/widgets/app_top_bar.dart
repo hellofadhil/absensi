@@ -25,6 +25,7 @@ class AppTopBar extends StatelessWidget {
     this.onInfoTap,
     this.onBackTap,
     this.actions = const [],
+    this.showThemeToggle = true,
     // Kept temporarily so existing pages can migrate incrementally.
     this.onHomePressed,
     this.onLanguagePressed,
@@ -45,6 +46,7 @@ class AppTopBar extends StatelessWidget {
   final VoidCallback? onInfoTap;
   final VoidCallback? onBackTap;
   final List<Widget> actions;
+  final bool showThemeToggle;
 
   @Deprecated('Use showBackButton and onBackTap instead.')
   final VoidCallback? onHomePressed;
@@ -134,8 +136,10 @@ class AppTopBar extends StatelessWidget {
                 onTap: onInfoTap ?? onInfoPressed,
               ),
             ],
-            const SizedBox(width: AppSpacing.xs),
-            const _ThemeToggleButton(),
+            if (showThemeToggle) ...[
+              const SizedBox(width: AppSpacing.xs),
+              const _ThemeToggleButton(),
+            ],
             if (actions.isNotEmpty) ...[
               const SizedBox(width: AppSpacing.xs),
               ...actions,

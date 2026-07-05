@@ -24,16 +24,19 @@ class MockAttendanceRepository implements AttendanceRepository {
         continue;
       }
 
-      // 85% Hadir, 8% Sakit/Izin, 7% Alfa
+      // 85% Hadir/Terlambat, 8% Sakit/Izin, 7% Alpa
       final roll = rand.nextDouble();
       if (roll < 0.85) {
-        // Hadir
+        // Hadir atau Terlambat
         final hour = 7;
         final minute = rand.nextInt(35); // check-in between 07:00 and 07:35
+        final checkInTime = DateTime(date.year, date.month, date.day, hour, minute);
+        final isLate = minute > 15;
         records.add(AttendanceRecord(
           date: date,
-          status: AttendanceStatus.hadir,
-          checkInTime: DateTime(date.year, date.month, date.day, hour, minute),
+          status: isLate ? AttendanceStatus.terlambat : AttendanceStatus.hadir,
+          checkInTime: checkInTime,
+          remarks: isLate ? 'Lewat ${minute - 15} menit dari batas toleransi' : null,
         ));
       } else if (roll < 0.90) {
         // Sakit
@@ -50,10 +53,10 @@ class MockAttendanceRepository implements AttendanceRepository {
           remarks: 'Ada keperluan keluarga penting',
         ));
       } else {
-        // Alfa
+        // Alpa
         records.add(AttendanceRecord(
           date: date,
-          status: AttendanceStatus.alfa,
+          status: AttendanceStatus.alpa,
         ));
       }
     }

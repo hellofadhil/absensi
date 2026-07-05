@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:absensi/core/router/route_names.dart';
+import 'package:absensi/features/attendance/presentation/widgets/manual_attendance_bottom_sheet.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_bottom_nav_bar.dart';
+import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_card.dart';
 import '../../../../shared/widgets/app_scaffold.dart';
 import '../../../../shared/widgets/app_top_bar.dart';
@@ -23,6 +25,7 @@ class AttendanceHistoryPage extends ConsumerStatefulWidget {
 class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
   int _currentPage = 1;
   static const _itemsPerPage = 10;
+  DateTime? _selectedDate;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +35,8 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     return AppScaffold(
       topBar: AppTopBar(
         title: 'Riwayat Presensi',
-        onHomePressed: () {},
+        subtitle: '${_getMonthName(selectedMonth.month)} ${selectedMonth.year}',
+        showThemeToggle: true,
       ),
       bottomNavigationBar: AppBottomNavBar(
         selectedDestination: AppBottomDestination.history,
@@ -55,11 +59,21 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
         data: (records) {
           // Calculate monthly stats
           final totalHadir = records.where((r) => r.isHadir).length;
-          final totalSakitIzin = records.where((r) => r.isSakit || r.isIzin).length;
-          final totalAlfa = records.where((r) => r.isAlfa).length;
+          final totalTerlambat = records.where((r) => r.isTerlambat).length;
+          final totalSakit = records.where((r) => r.isSakit).length;
+          final totalIzin = records.where((r) => r.isIzin).length;
+          final totalAlpa = records.where((r) => r.isAlpa).length;
+
+          // Filter by selected date
+          final filteredRecords = _selectedDate == null
+              ? records
+              : records.where((r) =>
+                  r.date.year == _selectedDate!.year &&
+                  r.date.month == _selectedDate!.month &&
+                  r.date.day == _selectedDate!.day).toList();
 
           // Pagination logic
-          final reversedRecords = records.reversed.toList();
+          final reversedRecords = filteredRecords.reversed.toList();
           final totalItems = reversedRecords.length;
           final totalPages = (totalItems / _itemsPerPage).ceil();
           
@@ -80,7 +94,10 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                 _MonthSelector(
                   selectedMonth: selectedMonth,
                   onPrevMonth: () {
-                    setState(() => _currentPage = 1);
+                    setState(() {
+                      _currentPage = 1;
+                      _selectedDate = null;
+                    });
                     ref.read(selectedCalendarMonthProvider.notifier).setMonth(
                         DateTime(selectedMonth.year, selectedMonth.month - 1, 1));
                   },
@@ -88,9 +105,19 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                     // Prevent navigating to future months
                     final nextMonth = DateTime(selectedMonth.year, selectedMonth.month + 1, 1);
                     if (nextMonth.isBefore(DateTime.now())) {
-                      setState(() => _currentPage = 1);
+                      setState(() {
+                        _currentPage = 1;
+                        _selectedDate = null;
+                      });
                       ref.read(selectedCalendarMonthProvider.notifier).setMonth(nextMonth);
                     }
+                  },
+                  onMonthSelected: (newMonth) {
+                    setState(() {
+                      _currentPage = 1;
+                      _selectedDate = null;
+                    });
+                    ref.read(selectedCalendarMonthProvider.notifier).setMonth(newMonth);
                   },
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -99,28 +126,80 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                 _CalendarGrid(
                   selectedMonth: selectedMonth,
                   records: records,
+                  selectedDate: _selectedDate,
+                  onDateSelected: (date) {
+                    setState(() {
+                      _currentPage = 1;
+                      // Toggle selection
+                      if (_selectedDate != null &&
+                          _selectedDate!.year == date.year &&
+                          _selectedDate!.month == date.month &&
+                          _selectedDate!.day == date.day) {
+                        _selectedDate = null;
+                      } else {
+                        _selectedDate = date;
+                      }
+                    });
+                  },
                 ),
+                
+                // Selected Date Detail Box (if a date is selected)
+                if (_selectedDate != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _SelectedDateDetailBox(
+                    date: _selectedDate!,
+                    record: records.firstWhere(
+                      (r) => r.date.year == _selectedDate!.year &&
+                             r.date.month == _selectedDate!.month &&
+                             r.date.day == _selectedDate!.day,
+                      orElse: () => AttendanceRecord(date: _selectedDate!, status: AttendanceStatus.none),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
 
                 // Stats Summary
                 _StatsSummaryCard(
+                  selectedMonth: selectedMonth,
                   totalHadir: totalHadir,
-                  totalSakitIzin: totalSakitIzin,
-                  totalAlfa: totalAlfa,
+                  totalTerlambat: totalTerlambat,
+                  totalSakit: totalSakit,
+                  totalIzin: totalIzin,
+                  totalAlpa: totalAlpa,
                 ),
                 const SizedBox(height: AppSpacing.xl),
 
                 // Details List Header
-                const SectionHeader(title: 'Detail Kehadiran'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: SectionHeader(
+                        title: _selectedDate == null
+                            ? 'Detail Kehadiran'
+                            : 'Presensi ${toIndonesianDateString(_selectedDate!)}',
+                      ),
+                    ),
+                    if (_selectedDate != null)
+                      TextButton.icon(
+                        onPressed: () => setState(() => _selectedDate = null),
+                        icon: const Icon(Icons.clear_all_rounded, size: 16),
+                        label: const Text('Semua Hari', style: TextStyle(fontSize: 12)),
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: AppSpacing.md),
 
                 // Details List
-                if (records.isEmpty)
+                if (filteredRecords.isEmpty)
                   Center(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
+                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
                       child: Text(
-                        'Tidak ada data presensi pada bulan ini.',
+                        _selectedDate == null
+                            ? 'Tidak ada data presensi pada bulan ini.'
+                            : 'Tidak ada data presensi pada tanggal ini.',
                         style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                               color: context.appColors.textMuted,
                             ),
@@ -132,7 +211,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: paginatedRecords.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+                    separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
                     itemBuilder: (context, index) {
                       final record = paginatedRecords.elementAt(index);
                       return _AttendanceLogTile(record: record);
@@ -179,6 +258,28 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     );
   }
 
+  String toIndonesianDateString(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  String _getMonthName(int month) {
+    return switch (month) {
+      1 => 'Januari',
+      2 => 'Februari',
+      3 => 'Maret',
+      4 => 'April',
+      5 => 'Mei',
+      6 => 'Juni',
+      7 => 'Juli',
+      8 => 'Agustus',
+      9 => 'September',
+      10 => 'Oktober',
+      11 => 'November',
+      12 => 'Desember',
+      _ => '',
+    };
+  }
+
   void _handleNavigation(
     BuildContext context,
     AppBottomDestination destination,
@@ -187,6 +288,11 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
 
     if (destination == AppBottomDestination.home) {
       Navigator.pushReplacementNamed(context, RouteNames.home);
+      return;
+    }
+
+    if (destination == AppBottomDestination.scan) {
+      ManualAttendanceBottomSheet.show(context);
       return;
     }
 
@@ -217,11 +323,13 @@ class _MonthSelector extends StatelessWidget {
     required this.selectedMonth,
     required this.onPrevMonth,
     required this.onNextMonth,
+    required this.onMonthSelected,
   });
 
   final DateTime selectedMonth;
   final VoidCallback onPrevMonth;
   final VoidCallback onNextMonth;
+  final ValueChanged<DateTime> onMonthSelected;
 
   String _getMonthName(int month) {
     return switch (month) {
@@ -255,12 +363,40 @@ class _MonthSelector extends StatelessWidget {
             icon: const Icon(Icons.chevron_left_rounded),
             onPressed: onPrevMonth,
           ),
-          Text(
-            '${_getMonthName(selectedMonth.month)} ${selectedMonth.year}',
-            style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: context.appColors.textPrimary,
+          InkWell(
+            onTap: () {
+              showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => _PeriodPickerBottomSheet(
+                  initialMonth: selectedMonth,
+                  onApplied: onMonthSelected,
                 ),
+              );
+            },
+            borderRadius: BorderRadius.circular(8.0),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${_getMonthName(selectedMonth.month)} ${selectedMonth.year}',
+                    style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: context.appColors.textPrimary,
+                        ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: context.appColors.textSecondary,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right_rounded),
@@ -272,14 +408,202 @@ class _MonthSelector extends StatelessWidget {
   }
 }
 
+class _PeriodPickerBottomSheet extends StatefulWidget {
+  const _PeriodPickerBottomSheet({
+    required this.initialMonth,
+    required this.onApplied,
+  });
+
+  final DateTime initialMonth;
+  final ValueChanged<DateTime> onApplied;
+
+  @override
+  State<_PeriodPickerBottomSheet> createState() => _PeriodPickerBottomSheetState();
+}
+
+class _PeriodPickerBottomSheetState extends State<_PeriodPickerBottomSheet> {
+  late int _selectedYear;
+  late int _selectedMonth;
+
+  final List<int> _years = [2024, 2025, 2026, 2027];
+  final List<String> _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedYear = widget.initialMonth.year;
+    _selectedMonth = widget.initialMonth.month;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.appColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.bottomSheet)),
+      ),
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 48,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: context.appColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Pilih Periode',
+              style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Tahun',
+              style: Theme.of(context).textTheme.titleSmall!.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: context.appColors.textSecondary,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: _years.map((year) {
+                final isSelected = year == _selectedYear;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: ChoiceChip(
+                      label: Text(
+                        '$year',
+                        style: TextStyle(
+                          color: isSelected ? context.appColors.textInverse : context.appColors.textPrimary,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      selected: isSelected,
+                      selectedColor: context.appColors.primary,
+                      backgroundColor: context.appColors.surfaceSoft,
+                      showCheckmark: false,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() => _selectedYear = year);
+                        }
+                      },
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Bulan',
+              style: Theme.of(context).textTheme.titleSmall!.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: context.appColors.textSecondary,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 12,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: 2.0,
+              ),
+              itemBuilder: (context, index) {
+                final monthNum = index + 1;
+                final isSelected = monthNum == _selectedMonth;
+                final monthName = _months[index];
+                
+                final isFuture = _selectedYear > now.year || 
+                    (_selectedYear == now.year && monthNum > now.month);
+
+                return InkWell(
+                  onTap: isFuture
+                      ? null
+                      : () => setState(() => _selectedMonth = monthNum),
+                  borderRadius: BorderRadius.circular(8.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? context.appColors.primary
+                          : (isFuture ? context.appColors.surfaceSoft.withValues(alpha: 0.5) : context.appColors.surfaceSoft),
+                      borderRadius: BorderRadius.circular(8.0),
+                      border: isSelected
+                          ? Border.all(color: context.appColors.primary)
+                          : Border.all(color: Colors.transparent),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      monthName,
+                      style: TextStyle(
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected
+                            ? context.appColors.textInverse
+                            : (isFuture ? context.appColors.textDisabled : context.appColors.textPrimary),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Row(
+              children: [
+                Expanded(
+                  child: AppSecondaryButton(
+                    label: 'Batal',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: AppPrimaryButton(
+                    label: 'Terapkan',
+                    onPressed: () {
+                      widget.onApplied(DateTime(_selectedYear, _selectedMonth, 1));
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CalendarGrid extends StatelessWidget {
   const _CalendarGrid({
     required this.selectedMonth,
     required this.records,
+    required this.selectedDate,
+    required this.onDateSelected,
   });
 
   final DateTime selectedMonth;
   final List<AttendanceRecord> records;
+  final DateTime? selectedDate;
+  final ValueChanged<DateTime> onDateSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -295,9 +619,10 @@ class _CalendarGrid extends StatelessWidget {
     final weekdays = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
       showShadow: true,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Weekdays header
           Row(
@@ -307,7 +632,7 @@ class _CalendarGrid extends StatelessWidget {
               return Expanded(
                 child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
                     child: Text(
                       day,
                       style: Theme.of(context).textTheme.labelSmall!.copyWith(
@@ -322,17 +647,18 @@ class _CalendarGrid extends StatelessWidget {
               );
             }).toList(),
           ),
-          const Divider(),
-          const SizedBox(height: AppSpacing.xs),
+          const Divider(height: 1),
+          const SizedBox(height: 4.0),
 
           // Days grid
           ListView.builder(
+            padding: EdgeInsets.zero,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: totalRows,
             itemBuilder: (context, rowIndex) {
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6.0),
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
                 child: Row(
                   children: List.generate(7, (colIndex) {
                     final cellIndex = rowIndex * 7 + colIndex;
@@ -352,10 +678,22 @@ class _CalendarGrid extends StatelessWidget {
                       orElse: () => AttendanceRecord(date: date, status: AttendanceStatus.none),
                     );
 
+                    final isSelected = selectedDate != null &&
+                        selectedDate!.year == date.year &&
+                        selectedDate!.month == date.month &&
+                        selectedDate!.day == date.day;
+
                     return Expanded(
-                      child: AspectRatio(
-                        aspectRatio: 1.1,
-                        child: _CalendarCell(record: record),
+                      child: SizedBox(
+                        height: 44.0,
+                        child: InkWell(
+                          onTap: () => onDateSelected(date),
+                          borderRadius: BorderRadius.circular(22),
+                          child: _CalendarCell(
+                            record: record,
+                            isSelected: isSelected,
+                          ),
+                        ),
                       ),
                     );
                   }),
@@ -363,16 +701,79 @@ class _CalendarGrid extends StatelessWidget {
               );
             },
           ),
+          Container(
+            margin: const EdgeInsets.only(top: 14.0),
+            padding: const EdgeInsets.only(top: 12.0),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: context.appColors.border,
+                  width: 1.0,
+                ),
+              ),
+            ),
+            child: Wrap(
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.xs,
+              alignment: WrapAlignment.center,
+              children: [
+                _LegendItem(label: 'Hadir', color: context.appColors.success),
+                _LegendItem(label: 'Terlambat', color: context.appColors.warning),
+                _LegendItem(label: 'Sakit/Izin', color: context.appColors.primary),
+                _LegendItem(label: 'Alpa', color: context.appColors.danger),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                color: context.appColors.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
 class _CalendarCell extends StatelessWidget {
-  const _CalendarCell({required this.record});
+  const _CalendarCell({
+    required this.record,
+    required this.isSelected,
+  });
 
   final AttendanceRecord record;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -389,11 +790,15 @@ class _CalendarCell extends StatelessWidget {
       backgroundColor = context.appColors.successSoft;
       borderOutlineColor = context.appColors.success.withValues(alpha: 0.3);
       textColor = context.appColors.success;
-    } else if (record.isSakit || record.isIzin) {
+    } else if (record.isTerlambat) {
       backgroundColor = context.appColors.warningSoft;
       borderOutlineColor = context.appColors.warning.withValues(alpha: 0.3);
       textColor = context.appColors.warning;
-    } else if (record.isAlfa) {
+    } else if (record.isSakit || record.isIzin) {
+      backgroundColor = context.appColors.primarySoft;
+      borderOutlineColor = context.appColors.primary.withValues(alpha: 0.3);
+      textColor = context.appColors.primary;
+    } else if (record.isAlpa) {
       backgroundColor = context.appColors.dangerSoft;
       borderOutlineColor = context.appColors.danger.withValues(alpha: 0.3);
       textColor = context.appColors.danger;
@@ -403,14 +808,16 @@ class _CalendarCell extends StatelessWidget {
 
     return Center(
       child: Container(
-        width: 42,
-        height: 42,
+        width: 38,
+        height: 38,
         decoration: BoxDecoration(
           color: backgroundColor,
           shape: BoxShape.circle,
-          border: borderOutlineColor != null
-              ? Border.all(color: borderOutlineColor)
-              : (isToday ? Border.all(color: context.appColors.primary, width: 1.5) : null),
+          border: isSelected
+              ? Border.all(color: context.appColors.primary, width: 2.0)
+              : (borderOutlineColor != null
+                  ? Border.all(color: borderOutlineColor)
+                  : (isToday ? Border.all(color: context.appColors.primary.withValues(alpha: 0.5), width: 1.5) : null)),
         ),
         alignment: Alignment.center,
         child: Stack(
@@ -419,10 +826,10 @@ class _CalendarCell extends StatelessWidget {
             Text(
               '${date.day}',
               style: TextStyle(
-                fontWeight: isToday || record.status != AttendanceStatus.none
+                fontWeight: isToday || isSelected || record.status != AttendanceStatus.none
                     ? FontWeight.bold
                     : FontWeight.normal,
-                color: textColor,
+                color: isSelected ? context.appColors.primary : textColor,
                 fontSize: 14,
               ),
             ),
@@ -433,7 +840,7 @@ class _CalendarCell extends StatelessWidget {
                   width: 3,
                   height: 3,
                   decoration: BoxDecoration(
-                    color: context.appColors.primary,
+                    color: isSelected ? context.appColors.primary : context.appColors.primary,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -445,40 +852,220 @@ class _CalendarCell extends StatelessWidget {
   }
 }
 
-class _StatsSummaryCard extends StatelessWidget {
-  const _StatsSummaryCard({
-    required this.totalHadir,
-    required this.totalSakitIzin,
-    required this.totalAlfa,
+class _SelectedDateDetailBox extends StatelessWidget {
+  const _SelectedDateDetailBox({
+    required this.date,
+    required this.record,
   });
 
+  final DateTime date;
+  final AttendanceRecord record;
+
+  String _formatIndonesianFullDate(DateTime date) {
+    final weekdays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+    final months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return '${weekdays[date.weekday - 1]}, ${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final todayMidnight = DateTime(now.year, now.month, now.day);
+    final isFuture = date.isAfter(todayMidnight);
+    final isWeekend = date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+    final hasStatus = record.status != AttendanceStatus.none;
+
+    String statusText = '';
+    String subStatusText = '';
+    Color textColor = context.appColors.textSecondary;
+    IconData icon = Icons.info_outline_rounded;
+    Color iconColor = context.appColors.textMuted;
+
+    if (record.isHadir) {
+      final timeStr = record.checkInTime != null
+          ? ' • ${record.checkInTime!.hour.toString().padLeft(2, '0')}:${record.checkInTime!.minute.toString().padLeft(2, '0')}'
+          : '';
+      statusText = 'Hadir$timeStr';
+      textColor = context.appColors.success;
+      icon = Icons.check_circle_outline_rounded;
+      iconColor = context.appColors.success;
+    } else if (record.isTerlambat) {
+      final timeStr = record.checkInTime != null
+          ? ' • ${record.checkInTime!.hour.toString().padLeft(2, '0')}:${record.checkInTime!.minute.toString().padLeft(2, '0')}'
+          : '';
+      statusText = 'Terlambat$timeStr';
+      subStatusText = record.remarks ?? '';
+      textColor = context.appColors.warning;
+      icon = Icons.access_time_rounded;
+      iconColor = context.appColors.warning;
+    } else if (record.isSakit) {
+      statusText = 'Sakit';
+      subStatusText = record.remarks ?? '';
+      textColor = context.appColors.primary;
+      icon = Icons.sick_outlined;
+      iconColor = context.appColors.primary;
+    } else if (record.isIzin) {
+      statusText = 'Izin';
+      subStatusText = record.remarks ?? '';
+      textColor = context.appColors.primary;
+      icon = Icons.info_outline_rounded;
+      iconColor = context.appColors.primary;
+    } else if (record.isAlpa) {
+      statusText = 'Alpa';
+      subStatusText = 'Tidak hadir tanpa keterangan';
+      textColor = context.appColors.danger;
+      icon = Icons.cancel_outlined;
+      iconColor = context.appColors.danger;
+    } else {
+      // status is none
+      if (isFuture) {
+        statusText = 'Data belum tersedia';
+        subStatusText = 'Presensi untuk tanggal ini belum dibuka.';
+        textColor = context.appColors.textMuted;
+        icon = Icons.lock_outline_rounded;
+        iconColor = context.appColors.textMuted;
+      } else {
+        statusText = 'Tidak ada presensi';
+        subStatusText = isWeekend 
+            ? 'Hari libur akhir pekan.' 
+            : 'Hari libur atau belum ada data kehadiran.';
+        textColor = context.appColors.textSecondary;
+        icon = Icons.event_busy_rounded;
+        iconColor = context.appColors.textMuted;
+      }
+    }
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      radius: AppRadius.small,
+      variant: AppCardVariant.softBlue,
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 24),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _formatIndonesianFullDate(date),
+                  style: Theme.of(context).textTheme.titleSmall!.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: context.appColors.textPrimary,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  statusText,
+                  style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                        color: textColor,
+                        fontWeight: hasStatus ? FontWeight.bold : FontWeight.normal,
+                      ),
+                ),
+                if (subStatusText.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subStatusText,
+                    style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                          color: context.appColors.textSecondary,
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatsSummaryCard extends StatelessWidget {
+  const _StatsSummaryCard({
+    required this.selectedMonth,
+    required this.totalHadir,
+    required this.totalTerlambat,
+    required this.totalSakit,
+    required this.totalIzin,
+    required this.totalAlpa,
+  });
+
+  final DateTime selectedMonth;
   final int totalHadir;
-  final int totalSakitIzin;
-  final int totalAlfa;
+  final int totalTerlambat;
+  final int totalSakit;
+  final int totalIzin;
+  final int totalAlpa;
+
+  String _getMonthName(int month) {
+    return switch (month) {
+      1 => 'Januari',
+      2 => 'Februari',
+      3 => 'Maret',
+      4 => 'April',
+      5 => 'Mei',
+      6 => 'Juni',
+      7 => 'Juli',
+      8 => 'Agustus',
+      9 => 'September',
+      10 => 'Oktober',
+      11 => 'November',
+      12 => 'Desember',
+      _ => '',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _StatSummaryCol(
-            label: 'Hadir',
-            value: '$totalHadir',
-            color: context.appColors.success,
+          Text(
+            'Rekap ${_getMonthName(selectedMonth.month)} ${selectedMonth.year}',
+            style: Theme.of(context).textTheme.titleSmall!.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: context.appColors.textPrimary,
+                ),
           ),
-          Container(width: 1, height: 32, color: context.appColors.border),
-          _StatSummaryCol(
-            label: 'Sakit/Izin',
-            value: '$totalSakitIzin',
-            color: context.appColors.warning,
-          ),
-          Container(width: 1, height: 32, color: context.appColors.border),
-          _StatSummaryCol(
-            label: 'Alfa',
-            value: '$totalAlfa',
-            color: context.appColors.danger,
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _StatSummaryCol(
+                label: 'Hadir',
+                value: '$totalHadir',
+                color: context.appColors.success,
+              ),
+              Container(width: 1, height: 32, color: context.appColors.border),
+              _StatSummaryCol(
+                label: 'Telat',
+                value: '$totalTerlambat',
+                color: context.appColors.warning,
+              ),
+              Container(width: 1, height: 32, color: context.appColors.border),
+              _StatSummaryCol(
+                label: 'Sakit',
+                value: '$totalSakit',
+                color: context.appColors.primary,
+              ),
+              Container(width: 1, height: 32, color: context.appColors.border),
+              _StatSummaryCol(
+                label: 'Izin',
+                value: '$totalIzin',
+                color: context.appColors.primary,
+              ),
+              Container(width: 1, height: 32, color: context.appColors.border),
+              _StatSummaryCol(
+                label: 'Alpa',
+                value: '$totalAlpa',
+                color: context.appColors.danger,
+              ),
+            ],
           ),
         ],
       ),
@@ -547,16 +1134,23 @@ class _AttendanceLogTile extends StatelessWidget {
       badgeText = 'Hadir • $checkInStr';
       badgeBgColor = context.appColors.successSoft;
       badgeTextColor = context.appColors.success;
+    } else if (record.isTerlambat) {
+      final checkInStr = record.checkInTime != null
+          ? '${record.checkInTime!.hour.toString().padLeft(2, '0')}:${record.checkInTime!.minute.toString().padLeft(2, '0')}'
+          : '--:--';
+      badgeText = 'Terlambat • $checkInStr';
+      badgeBgColor = context.appColors.warningSoft;
+      badgeTextColor = context.appColors.warning;
     } else if (record.isSakit) {
       badgeText = 'Sakit';
-      badgeBgColor = context.appColors.warningSoft;
-      badgeTextColor = context.appColors.warning;
+      badgeBgColor = context.appColors.primarySoft;
+      badgeTextColor = context.appColors.primary;
     } else if (record.isIzin) {
       badgeText = 'Izin';
-      badgeBgColor = context.appColors.warningSoft;
-      badgeTextColor = context.appColors.warning;
-    } else if (record.isAlfa) {
-      badgeText = 'Alfa';
+      badgeBgColor = context.appColors.primarySoft;
+      badgeTextColor = context.appColors.primary;
+    } else if (record.isAlpa) {
+      badgeText = 'Alpa';
       badgeBgColor = context.appColors.dangerSoft;
       badgeTextColor = context.appColors.danger;
     }
