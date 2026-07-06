@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../features/attendance/presentation/pages/attendance_history_page.dart';
 import '../../features/auth/presentation/pages/auth_gate.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/profile/presentation/pages/profile_page.dart';
 import 'route_names.dart';
 
 abstract final class AppRouter {
@@ -11,6 +12,7 @@ abstract final class AppRouter {
       RouteNames.home => const AuthGate(),
       RouteNames.login => const LoginPage(),
       RouteNames.history => const AttendanceHistoryPage(),
+      RouteNames.profile => const ProfilePage(),
       _ => const AuthGate(),
     };
 

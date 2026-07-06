@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -43,8 +44,38 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final authState = ref.watch(authProvider);
     final isLoading = authState is AuthLoading;
 
-    // Listen to AuthState changes to redirect to Home on success
+    // Listen to AuthState changes to redirect to Home on success and manage overlay loader
     ref.listen<AuthState>(authProvider, (previous, next) {
+      if (previous is AuthLoading && next is! AuthLoading) {
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      }
+
+      if (next is AuthLoading) {
+        showGeneralDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          barrierColor: Colors.black.withValues(alpha: 0.7),
+          transitionDuration: const Duration(milliseconds: 350),
+          pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+          transitionBuilder: (context, anim, anim2, child) {
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8.0, sigmaY: 8.0),
+              child: FadeTransition(
+                opacity: anim,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.85, end: 1.0).animate(
+                    CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
+                  ),
+                  child: const _LoginOverlay(),
+                ),
+              ),
+            );
+          },
+        );
+      }
+
       if (next is Authenticated) {
         Navigator.pushReplacementNamed(context, RouteNames.home);
       }
@@ -92,7 +123,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  'Masuk untuk mencatat kehadiran Anda hari ini',
+                  'Masuk dengan akun sekolah untuk mencatat kehadiran hari ini.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                         color: context.appColors.textSecondary,
@@ -244,29 +275,126 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       const SizedBox(height: AppSpacing.xxl),
 
                       // Submit Button
-                      if (isLoading)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8.0),
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else
-                        SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: AppPrimaryButton(
-                            label: 'Masuk Ke Akun',
-                            onPressed: _submit,
-                            icon: Icons.login_rounded,
-                          ),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: AppPrimaryButton(
+                          label: 'Masuk Ke Akun',
+                          onPressed: isLoading ? null : _submit,
+                          icon: Icons.login_rounded,
                         ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LoginOverlay extends StatefulWidget {
+  const _LoginOverlay();
+
+  @override
+  State<_LoginOverlay> createState() => _LoginOverlayState();
+}
+
+class _LoginOverlayState extends State<_LoginOverlay> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _rotateAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween<double>(begin: 1.0, end: 1.1).chain(CurveTween(curve: Curves.easeInOut)), weight: 50),
+      TweenSequenceItem(tween: Tween<double>(begin: 1.1, end: 1.0).chain(CurveTween(curve: Curves.easeInOut)), weight: 50),
+    ]).animate(_controller);
+
+    _rotateAnimation = Tween<double>(begin: 0.0, end: 2.0 * 3.141592653589793).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.linear,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                return ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      color: context.appColors.primarySoft,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: context.appColors.primary,
+                        width: 3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: context.appColors.primary.withValues(alpha: 0.35),
+                          blurRadius: 24,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: Transform.rotate(
+                      angle: _rotateAnimation.value,
+                      child: Icon(
+                        Icons.school_rounded,
+                        size: 46,
+                        color: context.appColors.primaryDeep,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Text(
+              'Memverifikasi Akun...',
+              style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                    color: context.appColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Masuk ke sistem absensi sekolah',
+              style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                    color: context.appColors.textMuted,
+                  ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/services/shared_preferences_provider.dart';
-import '../../data/repositories/auth_repository_impl.dart';
+import '../../data/repositories/firebase_auth_repository_impl.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -31,8 +30,7 @@ class AuthError extends AuthState {
 }
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return MockAuthRepository(prefs);
+  return FirebaseAuthRepository();
 });
 
 class AuthNotifier extends Notifier<AuthState> {
@@ -81,6 +79,20 @@ class AuthNotifier extends Notifier<AuthState> {
       state = const Unauthenticated();
     } catch (e) {
       state = AuthError(e.toString());
+    }
+  }
+
+  Future<bool> updateProfile(AppUser updatedUser) async {
+    final currentState = state;
+    if (currentState is! Authenticated) return false;
+    
+    final repository = ref.read(authRepositoryProvider);
+    try {
+      await repository.updateProfile(updatedUser.uid, updatedUser);
+      state = Authenticated(updatedUser);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 }

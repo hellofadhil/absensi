@@ -9,10 +9,12 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_bottom_nav_bar.dart';
 import '../../../../shared/widgets/app_card.dart';
 import '../../../../shared/widgets/app_scaffold.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../../shared/widgets/app_top_bar.dart';
-import '../../../../shared/widgets/progress_card.dart';
 import '../../../../shared/widgets/section_header.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
+import 'package:absensi/features/attendance/presentation/providers/attendance_provider.dart';
+import 'package:absensi/features/attendance/domain/entities/attendance_record.dart';
+import 'package:absensi/features/auth/presentation/providers/auth_provider.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -20,7 +22,67 @@ class HomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
-    final displayName = authState is Authenticated ? authState.user.displayName : 'Pengguna';
+    final displayName = authState is Authenticated
+        ? (authState.user.nickname ?? authState.user.displayName)
+        : 'Pengguna';
+
+    final todayAttendance = ref.watch(todayAttendanceProvider);
+    final hasCheckedIn = todayAttendance.maybeWhen(
+      data: (record) => record != null,
+      orElse: () => false,
+    );
+
+    final currentHour = DateTime.now().hour;
+    final String timeOfDayGreeting;
+    if (currentHour >= 5 && currentHour < 11) {
+      timeOfDayGreeting = 'Selamat pagi';
+    } else if (currentHour >= 11 && currentHour < 15) {
+      timeOfDayGreeting = 'Selamat siang';
+    } else if (currentHour >= 15 && currentHour < 18) {
+      timeOfDayGreeting = 'Selamat sore';
+    } else {
+      timeOfDayGreeting = 'Selamat malam';
+    }
+
+    var titleText = '$timeOfDayGreeting, $displayName \u{1F44B}';
+    var subtitleText = 'Jangan lupa presensi sebelum jam 07:00.';
+
+    todayAttendance.whenOrNull(
+      data: (record) {
+        if (record != null) {
+          if (record.status == AttendanceStatus.terlambat) {
+            int minutesLate = 0;
+            if (record.checkInTime != null) {
+              final limit = DateTime(
+                record.checkInTime!.year,
+                record.checkInTime!.month,
+                record.checkInTime!.day,
+                7,
+                0,
+              );
+              minutesLate = record.checkInTime!.difference(limit).inMinutes;
+              if (minutesLate < 0) minutesLate = 0;
+            }
+            titleText = 'Hai, $displayName';
+            subtitleText = 'Anda terlambat $minutesLate menit hari ini.';
+          } else if (record.status == AttendanceStatus.hadir) {
+            titleText = '$timeOfDayGreeting, $displayName \u{1F44B}';
+            subtitleText = 'Presensi hari ini sudah tercatat.';
+          } else if (record.status == AttendanceStatus.sakit) {
+            titleText = '$timeOfDayGreeting, $displayName \u{1F44B}';
+            subtitleText = 'Status hari ini: Sakit${record.remarks != null ? ' (${record.remarks})' : ''}.';
+          } else if (record.status == AttendanceStatus.izin) {
+            titleText = '$timeOfDayGreeting, $displayName \u{1F44B}';
+            subtitleText = 'Status hari ini: Izin${record.remarks != null ? ' (${record.remarks})' : ''}.';
+          } else if (record.status == AttendanceStatus.alpa) {
+            titleText = 'Hai, $displayName';
+            subtitleText = 'Status hari ini: Alpa.';
+          }
+        }
+      },
+    );
+
+    final onPressed = hasCheckedIn ? null : () => ManualAttendanceBottomSheet.show(context);
 
     return AppScaffold(
       topBar: AppTopBar(
@@ -43,22 +105,24 @@ class HomePage extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Hi, $displayName \u{1F44B}',
+              titleText,
               style: Theme.of(context).textTheme.headlineLarge!,
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Sudahkah Anda melakukan presensi hari ini?',
+              subtitleText,
               style: Theme.of(context).textTheme.bodyLarge!,
             ),
             const SizedBox(height: AppSpacing.xxl),
-            ProgressCard(
-              eyebrow: 'Kehadiran Bulan Ini',
-              title: 'Persentase Kehadiran',
-              description: 'Pertahankan kehadiran Anda untuk tetap di atas batas minimum sekolah (85%).',
-              progress: 0.9,
-              actionLabel: 'Lakukan Presensi Sekarang',
-              onPressed: () => ManualAttendanceBottomSheet.show(context),
+            _TodayAttendanceCard(
+              record: todayAttendance.maybeWhen(
+                data: (record) => record,
+                orElse: () => null,
+              ),
+              onPresensiPressed: onPressed,
+              onDetailPressed: () {
+                Navigator.pushReplacementNamed(context, RouteNames.history);
+              },
             ),
             const SizedBox(height: AppSpacing.md),
             const _AttendanceStatsCard(),
@@ -127,6 +191,11 @@ class HomePage extends ConsumerWidget {
       return;
     }
 
+    if (destination == AppBottomDestination.profile) {
+      Navigator.pushReplacementNamed(context, RouteNames.profile);
+      return;
+    }
+
     final label = switch (destination) {
       AppBottomDestination.home => 'Beranda',
       AppBottomDestination.calendar => 'Jadwal',
@@ -139,14 +208,121 @@ class HomePage extends ConsumerWidget {
 
 
   void _showComingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('Fitur $label akan segera hadir.'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
+    AppToast.showInfo(
+      context,
+      title: 'Segera Hadir!',
+      message: 'Fitur $label sedang dalam tahap pengembangan.',
+    );
+  }
+}
+
+class _TodayAttendanceCard extends StatelessWidget {
+  const _TodayAttendanceCard({
+    required this.record,
+    required this.onPresensiPressed,
+    required this.onDetailPressed,
+  });
+
+  final AttendanceRecord? record;
+  final VoidCallback? onPresensiPressed;
+  final VoidCallback onDetailPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasCheckedIn = record != null;
+
+    String cardTitle = 'Status Presensi Hari Ini';
+    String line1 = 'Batas presensi: 07:00 WIB';
+    String? line2;
+
+    if (hasCheckedIn) {
+      final rec = record!;
+      if (rec.checkInTime != null) {
+        final timeStr = '${rec.checkInTime!.hour.toString().padLeft(2, '0')}:${rec.checkInTime!.minute.toString().padLeft(2, '0')} WIB';
+        line1 = timeStr;
+        line2 = 'Lokasi: ${rec.latitude != null ? 'Dalam area sekolah' : 'Luar area sekolah'}';
+      } else {
+        line1 = rec.remarks != null ? 'Keterangan: ${rec.remarks}' : 'Tidak ada keterangan';
+        line2 = null;
+      }
+    } else {
+      final now = DateTime.now();
+      final limit = DateTime(now.year, now.month, now.day, 7, 0);
+      final difference = limit.difference(now);
+      if (difference.isNegative) {
+        line2 = 'Batas presensi terlewati';
+      } else {
+        line2 = 'Sisa waktu: ${difference.inMinutes} menit';
+      }
+    }
+
+    return AppCard(
+      variant: AppCardVariant.standard,
+      radius: AppRadius.featureCard,
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      showShadow: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            cardTitle,
+            style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: context.appColors.textSecondary,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            line1,
+            style: Theme.of(context).textTheme.headlineMedium!.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: context.appColors.textPrimary,
+                ),
+          ),
+          if (line2 != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              line2,
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                    color: context.appColors.textSecondary,
+                  ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          SizedBox(
+            width: double.infinity,
+            child: hasCheckedIn
+                ? OutlinedButton.icon(
+                    onPressed: onDetailPressed,
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                    label: const Text('Lihat Detail Presensi'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: context.appColors.primary,
+                      side: BorderSide(color: context.appColors.primaryBorder),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.button),
+                      ),
+                    ),
+                  )
+                : ElevatedButton.icon(
+                    onPressed: onPresensiPressed,
+                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                    label: const Text('Presensi Sekarang'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: context.appColors.primary,
+                      foregroundColor: context.appColors.textInverse,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.button),
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -155,9 +331,9 @@ class _AttendanceStatsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const AppCard(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
         vertical: AppSpacing.md,
       ),
       child: Row(
@@ -166,21 +342,28 @@ class _AttendanceStatsCard extends StatelessWidget {
             icon: Icons.check_circle_rounded,
             value: '18 Hari',
             label: 'Hadir',
-            isSuccess: true,
+            color: context.appColors.success,
           ),
-          _StatDivider(),
+          const _StatDivider(),
           _DailyStat(
             icon: Icons.info_rounded,
             value: '2 Hari',
             label: 'Sakit/Izin',
-            isWarning: true,
+            color: context.appColors.primary,
           ),
-          _StatDivider(),
+          const _StatDivider(),
+          _DailyStat(
+            icon: Icons.watch_later_rounded,
+            value: '1 Hari',
+            label: 'Terlambat',
+            color: context.appColors.warning,
+          ),
+          const _StatDivider(),
           _DailyStat(
             icon: Icons.cancel_rounded,
             value: '0 Hari',
             label: 'Alpa',
-            isDanger: true,
+            color: context.appColors.danger,
           ),
         ],
       ),
@@ -193,44 +376,33 @@ class _DailyStat extends StatelessWidget {
     required this.icon,
     required this.value,
     required this.label,
-    this.isSuccess = false,
-    this.isWarning = false,
-    this.isDanger = false,
+    required this.color,
   });
 
   final IconData icon;
   final String value;
   final String label;
-  final bool isSuccess;
-  final bool isWarning;
-  final bool isDanger;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    Color iconColor = context.appColors.textSecondary;
-    if (isSuccess) {
-      iconColor = context.appColors.success;
-    } else if (isWarning) {
-      iconColor = context.appColors.warning;
-    } else if (isDanger) {
-      iconColor = context.appColors.danger;
-    }
-
     return Expanded(
       child: Column(
         children: [
-          Icon(icon, size: 20, color: iconColor),
+          Icon(icon, size: 20, color: color),
           const SizedBox(height: AppSpacing.xxs),
           Text(
             value,
             style: Theme.of(context).textTheme.labelLarge!,
             maxLines: 1,
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 2),
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall!,
             maxLines: 1,
+            textAlign: TextAlign.center,
           ),
         ],
       ),

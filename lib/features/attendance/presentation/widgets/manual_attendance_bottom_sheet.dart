@@ -1,10 +1,13 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_button.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../providers/attendance_provider.dart';
@@ -32,6 +35,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
   late final TimeOfDay _selectedTime;
   late AttendanceStatus _selectedStatus;
   late final TextEditingController _remarksController;
+  bool _isLocating = false;
 
   @override
   void initState() {
@@ -49,10 +53,174 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
     super.dispose();
   }
 
+  Future<Position?> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      throw Exception('Layanan lokasi dinonaktifkan. Silakan aktifkan GPS Anda.');
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        throw Exception('Izin akses lokasi ditolak oleh pengguna.');
+      }
+    }
+    
+    if (permission == LocationPermission.deniedForever) {
+      throw Exception('Izin akses lokasi ditolak permanen. Silakan izinkan melalui pengaturan.');
+    } 
+
+    try {
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 7),
+      );
+    } catch (_) {
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        return lastKnown;
+      }
+      throw Exception('Gagal mendapatkan koordinat GPS. Pastikan Anda berada di area terbuka atau aktifkan akurasi tinggi GPS.');
+    }
+  }
+
+  void _showErrorDialog({
+    required BuildContext context,
+    required String title,
+    required String message,
+    required String buttonLabel,
+    required VoidCallback onButtonPressed,
+  }) {
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim, anim2, child) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8.0, sigmaY: 8.0),
+          child: FadeTransition(
+            opacity: anim,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.88, end: 1.0).animate(
+                CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
+              ),
+              child: Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.featureCard),
+                ),
+                backgroundColor: context.appColors.surface,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: context.appColors.dangerSoft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.location_off_rounded,
+                          color: context.appColors.danger,
+                          size: 40,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: context.appColors.textPrimary,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        message,
+                        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                              color: context.appColors.textSecondary,
+                              height: 1.4,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: AppPrimaryButton(
+                          label: buttonLabel,
+                          onPressed: onButtonPressed,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _handleSubmit() async {
     if (_formKey.currentState?.validate() ?? false) {
       DateTime? checkInDateTime;
+      double? latitude;
+      double? longitude;
+
       if (_selectedStatus == AttendanceStatus.hadir) {
+        setState(() => _isLocating = true);
+        try {
+          final position = await _determinePosition();
+          if (position != null) {
+            latitude = position.latitude;
+            longitude = position.longitude;
+          }
+        } catch (e) {
+          setState(() => _isLocating = false);
+          if (mounted) {
+            final errorMsg = e.toString().replaceAll('Exception: ', '');
+            
+            String title = 'Gagal Mengakses Lokasi';
+            String buttonLabel = 'Mengerti';
+            VoidCallback onButtonPressed = () => Navigator.pop(context);
+
+            if (errorMsg.contains('Layanan lokasi dinonaktifkan')) {
+              title = 'GPS Tidak Aktif';
+              buttonLabel = 'Aktifkan Sekarang';
+              onButtonPressed = () async {
+                Navigator.pop(context);
+                await Geolocator.openLocationSettings();
+              };
+            } else if (errorMsg.contains('Izin akses lokasi ditolak') || errorMsg.contains('ditolak permanen')) {
+              title = 'Izin Lokasi Ditolak';
+              buttonLabel = 'Buka Pengaturan';
+              onButtonPressed = () async {
+                Navigator.pop(context);
+                await Geolocator.openAppSettings();
+              };
+            }
+
+            _showErrorDialog(
+              context: context,
+              title: title,
+              message: errorMsg,
+              buttonLabel: buttonLabel,
+              onButtonPressed: onButtonPressed,
+            );
+          }
+          return;
+        }
+        setState(() => _isLocating = false);
+
         checkInDateTime = DateTime(
           _selectedDate.year,
           _selectedDate.month,
@@ -62,52 +230,64 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
         );
       }
 
+      var finalStatus = _selectedStatus;
+      if (_selectedStatus == AttendanceStatus.hadir && checkInDateTime != null) {
+        final limit = DateTime(
+          checkInDateTime.year,
+          checkInDateTime.month,
+          checkInDateTime.day,
+          7,
+          0,
+        );
+        if (checkInDateTime.isAfter(limit)) {
+          finalStatus = AttendanceStatus.terlambat;
+        }
+      }
+
       final record = AttendanceRecord(
         date: _selectedDate,
-        status: _selectedStatus,
+        status: finalStatus,
         checkInTime: checkInDateTime,
         remarks: _selectedStatus != AttendanceStatus.hadir && _remarksController.text.isNotEmpty
             ? _remarksController.text
             : null,
+        latitude: latitude,
+        longitude: longitude,
       );
 
       final success = await ref.read(attendanceSubmissionProvider.notifier).submit(record);
 
       if (mounted && success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_outline_rounded, color: Colors.white),
-                SizedBox(width: AppSpacing.sm),
-                Text('Presensi berhasil disimpan secara manual!'),
-              ],
-            ),
-            backgroundColor: context.appColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
+        AppToast.showSuccess(
+          context,
+          title: 'Presensi Berhasil!',
+          message: 'Data kehadiran Anda telah tercatat hari ini.',
         );
         Navigator.pop(context);
       }
     }
   }
 
-
-
-
-
   @override
   Widget build(BuildContext context) {
     final submissionState = ref.watch(attendanceSubmissionProvider);
-    final isLoading = submissionState.isLoading;
+    final isLoading = submissionState.isLoading || _isLocating;
 
     final authState = ref.watch(authProvider);
     final user = authState is Authenticated ? authState.user : null;
     final isSiswa = user?.isSiswa ?? true;
     final title = isSiswa ? 'Presensi Hari Ini' : 'Presensi Manual Siswa';
 
+    final todayAttendance = ref.watch(todayAttendanceProvider);
+    final hasCheckedIn = todayAttendance.maybeWhen(
+      data: (record) => record != null,
+      orElse: () => false,
+    );
+
     final String buttonLabel;
-    if (isSiswa) {
+    if (hasCheckedIn) {
+      buttonLabel = 'Selesai Check-in';
+    } else if (isSiswa) {
       buttonLabel = switch (_selectedStatus) {
         AttendanceStatus.hadir => 'Check-in Sekarang',
         AttendanceStatus.sakit => 'Ajukan Sakit',
@@ -231,8 +411,6 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                 const SizedBox(height: AppSpacing.md),
               ],
 
-
-
               // Date Picker Field (Interactive Dummy)
               Text(
                 'Tanggal Presensi',
@@ -293,7 +471,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                     isSelected: _selectedStatus == AttendanceStatus.hadir,
                     selectedColor: context.appColors.success,
                     selectedBgColor: context.appColors.successSoft,
-                    onTap: () => setState(() => _selectedStatus = AttendanceStatus.hadir),
+                    onTap: hasCheckedIn ? null : () => setState(() => _selectedStatus = AttendanceStatus.hadir),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   _StatusOption(
@@ -302,7 +480,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                     isSelected: _selectedStatus == AttendanceStatus.sakit,
                     selectedColor: context.appColors.warning,
                     selectedBgColor: context.appColors.warningSoft,
-                    onTap: () => setState(() => _selectedStatus = AttendanceStatus.sakit),
+                    onTap: hasCheckedIn ? null : () => setState(() => _selectedStatus = AttendanceStatus.sakit),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   _StatusOption(
@@ -311,7 +489,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                     isSelected: _selectedStatus == AttendanceStatus.izin,
                     selectedColor: context.appColors.primary,
                     selectedBgColor: context.appColors.primarySoft,
-                    onTap: () => setState(() => _selectedStatus = AttendanceStatus.izin),
+                    onTap: hasCheckedIn ? null : () => setState(() => _selectedStatus = AttendanceStatus.izin),
                   ),
                 ],
               ),
@@ -370,7 +548,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                 const SizedBox(height: AppSpacing.xs),
                 TextFormField(
                   controller: _remarksController,
-                  enabled: !isLoading,
+                  enabled: !isLoading && !hasCheckedIn,
                   maxLines: 3,
                   decoration: InputDecoration(
                     hintText: _selectedStatus == AttendanceStatus.sakit
@@ -385,6 +563,10 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppRadius.button),
                       borderSide: BorderSide(color: context.appColors.border),
+                    ),
+                    disabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.button),
+                      borderSide: BorderSide(color: context.appColors.border.withValues(alpha: 0.5)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppRadius.button),
@@ -468,7 +650,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                           )
                         : AppPrimaryButton(
                             label: buttonLabel,
-                            onPressed: _handleSubmit,
+                            onPressed: hasCheckedIn ? null : _handleSubmit,
                           ),
                   ),
                 ],
@@ -496,7 +678,7 @@ class _StatusOption extends StatelessWidget {
   final bool isSelected;
   final Color selectedColor;
   final Color selectedBgColor;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

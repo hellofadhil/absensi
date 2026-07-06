@@ -22,7 +22,7 @@ class ProgressCard extends StatelessWidget {
   final String description;
   final double progress;
   final String actionLabel;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +95,7 @@ class ProgressCard extends StatelessWidget {
           AppPrimaryButton(
             label: actionLabel,
             onPressed: onPressed,
-            icon: Icons.arrow_forward_rounded,
+            icon: onPressed == null ? Icons.check_circle_rounded : Icons.arrow_forward_rounded,
           ),
         ],
       ),

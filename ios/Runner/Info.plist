@@ -30,6 +30,8 @@
 	<string>Microphone access is used to transcribe your speaking practice.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Speech recognition is used to turn your English practice into text.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Akses lokasi diperlukan untuk mencatat titik koordinat kehadiran saat check-in.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

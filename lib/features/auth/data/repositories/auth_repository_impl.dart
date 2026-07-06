@@ -25,15 +25,17 @@ class MockAuthRepository implements AuthRepository {
       user = const AppUser(
         uid: 'guru-123',
         email: 'guru@sekolah.com',
-        displayName: 'Pak Fadhil, M.Pd.',
+        displayName: 'Fadhil Rabbani, M.Pd.',
         role: 'guru',
+        nickname: 'Fadhil',
       );
     } else if (trimmedEmail == 'siswa@sekolah.com') {
       user = const AppUser(
         uid: 'siswa-456',
         email: 'siswa@sekolah.com',
-        displayName: 'Fadhil',
+        displayName: 'Fadhil Rabbani',
         role: 'siswa',
+        nickname: 'Fadhil',
       );
     } else {
       throw Exception('Email tidak terdaftar (coba: guru@sekolah.com atau siswa@sekolah.com).');
@@ -62,6 +64,11 @@ class MockAuthRepository implements AuthRepository {
         displayName: map['displayName'] as String,
         role: map['role'] as String,
         avatarUrl: map['avatarUrl'] as String?,
+        nickname: map['nickname'] as String?,
+        birthDate: map['birthDate'] as String?,
+        address: map['address'] as String?,
+        phoneNumber: map['phoneNumber'] as String?,
+        extraField: map['extraField'] as String?,
       );
     } catch (_) {
       return null;
@@ -75,7 +82,18 @@ class MockAuthRepository implements AuthRepository {
       'displayName': user.displayName,
       'role': user.role,
       'avatarUrl': user.avatarUrl,
+      'nickname': user.nickname,
+      'birthDate': user.birthDate,
+      'address': user.address,
+      'phoneNumber': user.phoneNumber,
+      'extraField': user.extraField,
     };
     await _prefs.setString(_userKey, jsonEncode(map));
+  }
+
+  @override
+  Future<void> updateProfile(String uid, AppUser user) async {
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    await _cacheUser(user);
   }
 }

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'firebase_options.dart';
 
 import 'core/router/app_router.dart';
 import 'core/router/route_names.dart';
@@ -10,6 +14,19 @@ import 'core/theme/theme_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load .env configuration
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (_) {}
+
+  // Initialize Firebase Core
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (_) {}
+
   final themeController = await ThemeController.load();
   final sharedPrefs = await SharedPreferences.getInstance();
   runApp(

@@ -296,6 +296,11 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       return;
     }
 
+    if (destination == AppBottomDestination.profile) {
+      Navigator.pushReplacementNamed(context, RouteNames.profile);
+      return;
+    }
+
     final label = switch (destination) {
       AppBottomDestination.home => 'Beranda',
       AppBottomDestination.calendar => 'Jadwal',
@@ -311,8 +316,79 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text('Fitur $label akan segera hadir.'),
-          duration: const Duration(seconds: 1),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1800),
+          content: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            decoration: BoxDecoration(
+              color: context.appColors.primarySoft,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: context.appColors.primary.withValues(alpha: 0.3),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: context.appColors.primary,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: context.appColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.info_outline_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Segera Hadir!',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: context.appColors.primaryDeep,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Fitur $label sedang dalam tahap pengembangan.',
+                        style: TextStyle(
+                          color: context.appColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       );
   }
@@ -364,16 +440,29 @@ class _MonthSelector extends StatelessWidget {
             onPressed: onPrevMonth,
           ),
           InkWell(
-            onTap: () {
-              showModalBottomSheet<void>(
+            onTap: () async {
+              final picked = await showDatePicker(
                 context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => _PeriodPickerBottomSheet(
-                  initialMonth: selectedMonth,
-                  onApplied: onMonthSelected,
-                ),
+                initialDate: selectedMonth,
+                firstDate: DateTime(2024),
+                lastDate: now,
+                builder: (context, child) {
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: ColorScheme.light(
+                        primary: context.appColors.primary,
+                        onPrimary: context.appColors.textInverse,
+                        surface: context.appColors.surface,
+                        onSurface: context.appColors.textPrimary,
+                      ),
+                    ),
+                    child: child!,
+                  );
+                },
               );
+              if (picked != null) {
+                onMonthSelected(DateTime(picked.year, picked.month, 1));
+              }
             },
             borderRadius: BorderRadius.circular(8.0),
             child: Padding(

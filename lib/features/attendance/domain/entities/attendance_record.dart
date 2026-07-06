@@ -6,12 +6,16 @@ class AttendanceRecord {
     required this.status,
     this.checkInTime,
     this.remarks,
+    this.latitude,
+    this.longitude,
   });
 
   final DateTime date;
   final AttendanceStatus status;
   final DateTime? checkInTime; // only if status is hadir or terlambat
   final String? remarks; // e.g., 'Surat Dokter' for sakit, 'Acara Keluarga' for izin, or late description
+  final double? latitude;
+  final double? longitude;
 
   bool get isHadir => status == AttendanceStatus.hadir;
   bool get isTerlambat => status == AttendanceStatus.terlambat;
@@ -24,12 +28,16 @@ class AttendanceRecord {
     AttendanceStatus? status,
     DateTime? checkInTime,
     String? remarks,
+    double? latitude,
+    double? longitude,
   }) {
     return AttendanceRecord(
       date: date ?? this.date,
       status: status ?? this.status,
       checkInTime: checkInTime ?? this.checkInTime,
       remarks: remarks ?? this.remarks,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 }
