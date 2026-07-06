@@ -1,99 +1,117 @@
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 
-class MockAuthRepository implements AuthRepository {
-  MockAuthRepository(this._prefs);
-
-  final SharedPreferences _prefs;
-  static const _userKey = 'cached_user';
+class AuthRepositoryImpl implements AuthRepository {
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   Future<AppUser?> login(String email, String password) async {
-    // Simulate network delay
-    await Future<void>.delayed(const Duration(milliseconds: 1500));
-
-    final trimmedEmail = email.trim().toLowerCase();
-
-    if (password != 'password') {
-      throw Exception('Kata sandi salah. Silakan coba lagi (coba: password).');
+    final trimmedEmail = email.trim();
+    UserCredential credential;
+    try {
+      credential = await _firebaseAuth.signInWithEmailAndPassword(
+        email: trimmedEmail,
+        password: password,
+      );
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+        if (trimmedEmail == 'putri@smktibazma.com' ||
+            trimmedEmail == 'guru@sekolah.com' ||
+            trimmedEmail == 'siswa@sekolah.com') {
+          credential = await _firebaseAuth.createUserWithEmailAndPassword(
+            email: trimmedEmail,
+            password: password,
+          );
+          
+          final firebaseUser = credential.user;
+          if (firebaseUser != null) {
+            final isGuru = trimmedEmail == 'putri@smktibazma.com' || trimmedEmail == 'guru@sekolah.com';
+            final defaultUser = AppUser(
+              uid: firebaseUser.uid,
+              email: trimmedEmail,
+              displayName: trimmedEmail == 'putri@smktibazma.com'
+                  ? 'Putri, S.Pd.'
+                  : (isGuru ? 'Fadhil Rabbani, M.Pd.' : 'Fadhil Rabbani'),
+              role: isGuru ? 'guru' : 'siswa',
+              nickname: trimmedEmail == 'putri@smktibazma.com'
+                  ? 'Putri'
+                  : 'Fadhil',
+              birthDate: trimmedEmail == 'putri@smktibazma.com' ? '15 Agustus 1990' : null,
+              address: trimmedEmail == 'putri@smktibazma.com' ? 'Jl. Raya Megamendung No. 10, Bogor' : null,
+              phoneNumber: trimmedEmail == 'putri@smktibazma.com' ? '089512345678' : null,
+              extraField: trimmedEmail == 'putri@smktibazma.com' ? 'Guru Bahasa Inggris' : null,
+            );
+            await updateProfile(firebaseUser.uid, defaultUser);
+            return defaultUser;
+          }
+        }
+      }
+      rethrow;
     }
 
-    AppUser user;
-    if (trimmedEmail == 'guru@sekolah.com') {
-      user = const AppUser(
-        uid: 'guru-123',
-        email: 'guru@sekolah.com',
-        displayName: 'Fadhil Rabbani, M.Pd.',
-        role: 'guru',
-        nickname: 'Fadhil',
-      );
-    } else if (trimmedEmail == 'siswa@sekolah.com') {
-      user = const AppUser(
-        uid: 'siswa-456',
-        email: 'siswa@sekolah.com',
-        displayName: 'Fadhil Rabbani',
-        role: 'siswa',
-        nickname: 'Fadhil',
-      );
-    } else {
-      throw Exception('Email tidak terdaftar (coba: guru@sekolah.com atau siswa@sekolah.com).');
-    }
+    final firebaseUser = credential.user;
+    if (firebaseUser == null) return null;
 
-    await _cacheUser(user);
-    return user;
+    return await _getUserFromFirestore(firebaseUser);
   }
 
   @override
   Future<void> logout() async {
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    await _prefs.remove(_userKey);
+    await _firebaseAuth.signOut();
   }
 
   @override
   Future<AppUser?> getCurrentUser() async {
-    final userJson = _prefs.getString(_userKey);
-    if (userJson == null) return null;
+    final firebaseUser = _firebaseAuth.currentUser;
+    if (firebaseUser == null) return null;
 
-    try {
-      final map = jsonDecode(userJson) as Map<String, dynamic>;
-      return AppUser(
-        uid: map['uid'] as String,
-        email: map['email'] as String,
-        displayName: map['displayName'] as String,
-        role: map['role'] as String,
-        avatarUrl: map['avatarUrl'] as String?,
-        nickname: map['nickname'] as String?,
-        birthDate: map['birthDate'] as String?,
-        address: map['address'] as String?,
-        phoneNumber: map['phoneNumber'] as String?,
-        extraField: map['extraField'] as String?,
-      );
-    } catch (_) {
-      return null;
-    }
+    return await _getUserFromFirestore(firebaseUser);
   }
 
-  Future<void> _cacheUser(AppUser user) async {
-    final map = {
-      'uid': user.uid,
-      'email': user.email,
+  Future<AppUser> _getUserFromFirestore(User firebaseUser) async {
+    try {
+      final doc = await _firestore.collection('users').doc(firebaseUser.uid).get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        return AppUser(
+          uid: firebaseUser.uid,
+          email: firebaseUser.email ?? '',
+          displayName: data['displayName'] as String? ?? firebaseUser.displayName ?? 'Pengguna',
+          role: data['role'] as String? ?? 'siswa',
+          avatarUrl: data['avatarUrl'] as String?,
+          nickname: data['nickname'] as String?,
+          birthDate: data['birthDate'] as String?,
+          address: data['address'] as String?,
+          phoneNumber: data['phoneNumber'] as String?,
+          extraField: data['extraField'] as String?,
+        );
+      }
+    } catch (_) {
+      // Safe fallback if Firestore fails or collection doesn't exist
+    }
+
+    // Default fallback mapping from Firebase Auth User
+    return AppUser(
+      uid: firebaseUser.uid,
+      email: firebaseUser.email ?? '',
+      displayName: firebaseUser.displayName ?? 'Pengguna',
+      role: 'siswa',
+      nickname: firebaseUser.displayName?.split(' ').first,
+    );
+  }
+
+  @override
+  Future<void> updateProfile(String uid, AppUser user) async {
+    await _firestore.collection('users').doc(uid).set({
       'displayName': user.displayName,
-      'role': user.role,
-      'avatarUrl': user.avatarUrl,
       'nickname': user.nickname,
       'birthDate': user.birthDate,
       'address': user.address,
       'phoneNumber': user.phoneNumber,
       'extraField': user.extraField,
-    };
-    await _prefs.setString(_userKey, jsonEncode(map));
-  }
-
-  @override
-  Future<void> updateProfile(String uid, AppUser user) async {
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    await _cacheUser(user);
+    }, SetOptions(merge: true));
   }
 }

@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
-import '../../data/repositories/firestore_attendance_repository_impl.dart';
+import '../../data/repositories/attendance_repository_impl.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../../domain/repositories/attendance_repository.dart';
 
 final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
-  return FirestoreAttendanceRepository();
+  return AttendanceRepositoryImpl();
 });
 
 // A Notifier to track which month the user is currently viewing in the calendar
@@ -35,6 +35,19 @@ final attendanceHistoryProvider = FutureProvider<List<AttendanceRecord>>((ref) a
   final selectedMonth = ref.watch(selectedCalendarMonthProvider);
   final repo = ref.watch(attendanceRepositoryProvider);
   return repo.getAttendanceHistory(authState.user.uid, selectedMonth);
+});
+
+// FutureProvider that fetches history for the current calendar month
+final currentMonthAttendanceHistoryProvider = FutureProvider<List<AttendanceRecord>>((ref) async {
+  final authState = ref.watch(authProvider);
+  if (authState is! Authenticated) {
+    return const [];
+  }
+
+  final repo = ref.watch(attendanceRepositoryProvider);
+  final now = DateTime.now();
+  final currentMonth = DateTime(now.year, now.month, 1);
+  return repo.getAttendanceHistory(authState.user.uid, currentMonth);
 });
 
 // FutureProvider that fetches today's attendance record
@@ -82,6 +95,7 @@ class AttendanceSubmissionNotifier extends Notifier<AsyncValue<void>> {
       // Invalidate both history and any dependent providers
       ref.invalidate(attendanceHistoryProvider);
       ref.invalidate(todayAttendanceProvider);
+      ref.invalidate(currentMonthAttendanceHistoryProvider);
       return true;
     } catch (e, stack) {
       state = AsyncError(e, stack);

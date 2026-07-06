@@ -85,9 +85,9 @@ class HomePage extends ConsumerWidget {
     final onPressed = hasCheckedIn ? null : () => ManualAttendanceBottomSheet.show(context);
 
     return AppScaffold(
-      topBar: AppTopBar(
-        title: 'Absensi Sekolah',
-        onHomePressed: () {},
+      topBar: const AppTopBar(
+        title: 'SMK TI Bazma',
+        subtitle: 'Tahun Ajaran 2026/2027',
       ),
       bottomNavigationBar: AppBottomNavBar(
         selectedDestination: AppBottomDestination.home,
@@ -125,7 +125,7 @@ class HomePage extends ConsumerWidget {
               },
             ),
             const SizedBox(height: AppSpacing.md),
-            const _AttendanceStatsCard(),
+            _AttendanceStatsCard(),
             const SizedBox(height: AppSpacing.xxl),
             const SectionHeader(title: 'Jadwal Hari Ini'),
             const SizedBox(height: AppSpacing.md),
@@ -326,46 +326,94 @@ class _TodayAttendanceCard extends StatelessWidget {
   }
 }
 
-class _AttendanceStatsCard extends StatelessWidget {
+class _AttendanceStatsCard extends ConsumerWidget {
   const _AttendanceStatsCard();
 
   @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.md,
-      ),
-      child: Row(
-        children: [
-          _DailyStat(
-            icon: Icons.check_circle_rounded,
-            value: '18 Hari',
-            label: 'Hadir',
-            color: context.appColors.success,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyAsync = ref.watch(currentMonthAttendanceHistoryProvider);
+
+    return historyAsync.maybeWhen(
+      data: (records) {
+        final totalHadir = records.where((r) => r.isHadir).length;
+        final totalSakitIzin = records.where((r) => r.isSakit || r.isIzin).length;
+        final totalTerlambat = records.where((r) => r.isTerlambat).length;
+        final totalAlpa = records.where((r) => r.isAlpa).length;
+
+        return AppCard(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.md,
           ),
-          const _StatDivider(),
-          _DailyStat(
-            icon: Icons.info_rounded,
-            value: '2 Hari',
-            label: 'Sakit/Izin',
-            color: context.appColors.primary,
+          child: Row(
+            children: [
+              _DailyStat(
+                icon: Icons.check_circle_rounded,
+                value: '$totalHadir Hari',
+                label: 'Hadir',
+                color: context.appColors.success,
+              ),
+              const _StatDivider(),
+              _DailyStat(
+                icon: Icons.info_rounded,
+                value: '$totalSakitIzin Hari',
+                label: 'Sakit/Izin',
+                color: context.appColors.primary,
+              ),
+              const _StatDivider(),
+              _DailyStat(
+                icon: Icons.watch_later_rounded,
+                value: '$totalTerlambat Hari',
+                label: 'Terlambat',
+                color: context.appColors.warning,
+              ),
+              const _StatDivider(),
+              _DailyStat(
+                icon: Icons.cancel_rounded,
+                value: '$totalAlpa Hari',
+                label: 'Alpa',
+                color: context.appColors.danger,
+              ),
+            ],
           ),
-          const _StatDivider(),
-          _DailyStat(
-            icon: Icons.watch_later_rounded,
-            value: '1 Hari',
-            label: 'Terlambat',
-            color: context.appColors.warning,
-          ),
-          const _StatDivider(),
-          _DailyStat(
-            icon: Icons.cancel_rounded,
-            value: '0 Hari',
-            label: 'Alpa',
-            color: context.appColors.danger,
-          ),
-        ],
+        );
+      },
+      orElse: () => AppCard(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            _DailyStat(
+              icon: Icons.check_circle_rounded,
+              value: '- Hari',
+              label: 'Hadir',
+              color: context.appColors.success,
+            ),
+            const _StatDivider(),
+            _DailyStat(
+              icon: Icons.info_rounded,
+              value: '- Hari',
+              label: 'Sakit/Izin',
+              color: context.appColors.primary,
+            ),
+            const _StatDivider(),
+            _DailyStat(
+              icon: Icons.watch_later_rounded,
+              value: '- Hari',
+              label: 'Terlambat',
+              color: context.appColors.warning,
+            ),
+            const _StatDivider(),
+            _DailyStat(
+              icon: Icons.cancel_rounded,
+              value: '- Hari',
+              label: 'Alpa',
+              color: context.appColors.danger,
+            ),
+          ],
+        ),
       ),
     );
   }

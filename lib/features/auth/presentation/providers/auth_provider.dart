@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../data/repositories/firebase_auth_repository_impl.dart';
+import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -30,7 +30,7 @@ class AuthError extends AuthState {
 }
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return FirebaseAuthRepository();
+  return AuthRepositoryImpl();
 });
 
 class AuthNotifier extends Notifier<AuthState> {
