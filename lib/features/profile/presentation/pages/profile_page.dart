@@ -10,6 +10,7 @@ import '../../../../shared/widgets/app_bottom_nav_bar.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_card.dart';
 import '../../../../shared/widgets/app_scaffold.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../../shared/widgets/app_top_bar.dart';
 import '../../../attendance/presentation/widgets/manual_attendance_bottom_sheet.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -77,11 +78,24 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     return 'U';
   }
 
-  void _handleNavigation(BuildContext context, AppBottomDestination destination) {
+  void _handleNavigation(BuildContext context, AppBottomDestination destination, bool isGuru) {
     if (destination == AppBottomDestination.profile) return;
 
     if (destination == AppBottomDestination.home) {
       Navigator.pushReplacementNamed(context, RouteNames.home);
+      return;
+    }
+
+    if (destination == AppBottomDestination.calendar) {
+      if (isGuru) {
+        Navigator.pushReplacementNamed(context, RouteNames.students);
+      } else {
+        AppToast.showInfo(
+          context,
+          title: 'Segera Hadir!',
+          message: 'Fitur Jadwal sedang dalam tahap pengembangan.',
+        );
+      }
       return;
     }
 
@@ -94,94 +108,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       ManualAttendanceBottomSheet.show(context);
       return;
     }
-
-    final label = switch (destination) {
-      AppBottomDestination.home => 'Beranda',
-      AppBottomDestination.calendar => 'Jadwal',
-      AppBottomDestination.scan => 'Presensi',
-      AppBottomDestination.history => 'Riwayat',
-      AppBottomDestination.profile => 'Profil',
-    };
-    
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(milliseconds: 1800),
-          content: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.md,
-            ),
-            decoration: BoxDecoration(
-              color: context.appColors.primarySoft,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: context.appColors.primary.withValues(alpha: 0.3),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: context.appColors.primary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: context.appColors.primary.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.info_outline_rounded,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Segera Hadir!',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: context.appColors.primaryDeep,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Fitur $label sedang dalam tahap pengembangan.',
-                        style: TextStyle(
-                          color: context.appColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
   }
 
   @override
@@ -249,7 +175,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       ),
       bottomNavigationBar: AppBottomNavBar(
         selectedDestination: AppBottomDestination.profile,
-        onDestinationSelected: (destination) => _handleNavigation(context, destination),
+        isGuru: !isSiswa,
+        onDestinationSelected: (destination) => _handleNavigation(context, destination, !isSiswa),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(

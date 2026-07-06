@@ -22,8 +22,10 @@ class HomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
-    final displayName = authState is Authenticated
-        ? (authState.user.nickname ?? authState.user.displayName)
+    final user = authState is Authenticated ? authState.user : null;
+    final isGuru = user?.isGuru ?? false;
+    final displayName = user != null
+        ? (user.nickname ?? user.displayName)
         : 'Pengguna';
 
     final todayAttendance = ref.watch(todayAttendanceProvider);
@@ -63,8 +65,18 @@ class HomePage extends ConsumerWidget {
               minutesLate = record.checkInTime!.difference(limit).inMinutes;
               if (minutesLate < 0) minutesLate = 0;
             }
+            
+            final String lateText;
+            if (minutesLate < 60) {
+              lateText = '$minutesLate menit';
+            } else {
+              final hours = minutesLate ~/ 60;
+              final mins = minutesLate % 60;
+              lateText = mins == 0 ? '$hours Jam' : '$hours Jam $mins menit';
+            }
+
             titleText = 'Hai, $displayName';
-            subtitleText = 'Anda terlambat $minutesLate menit hari ini.';
+            subtitleText = 'Anda terlambat $lateText hari ini.';
           } else if (record.status == AttendanceStatus.hadir) {
             titleText = '$timeOfDayGreeting, $displayName \u{1F44B}';
             subtitleText = 'Presensi hari ini sudah tercatat.';
@@ -91,8 +103,9 @@ class HomePage extends ConsumerWidget {
       ),
       bottomNavigationBar: AppBottomNavBar(
         selectedDestination: AppBottomDestination.home,
+        isGuru: isGuru,
         onDestinationSelected: (destination) =>
-            _handleNavigation(context, destination),
+            _handleNavigation(context, destination, isGuru),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(
@@ -178,8 +191,18 @@ class HomePage extends ConsumerWidget {
   void _handleNavigation(
     BuildContext context,
     AppBottomDestination destination,
+    bool isGuru,
   ) {
     if (destination == AppBottomDestination.home) return;
+
+    if (destination == AppBottomDestination.calendar) {
+      if (isGuru) {
+        Navigator.pushReplacementNamed(context, RouteNames.students);
+      } else {
+        _showComingSoon(context, 'Jadwal');
+      }
+      return;
+    }
 
     if (destination == AppBottomDestination.history) {
       Navigator.pushReplacementNamed(context, RouteNames.history);
@@ -195,15 +218,6 @@ class HomePage extends ConsumerWidget {
       Navigator.pushReplacementNamed(context, RouteNames.profile);
       return;
     }
-
-    final label = switch (destination) {
-      AppBottomDestination.home => 'Beranda',
-      AppBottomDestination.calendar => 'Jadwal',
-      AppBottomDestination.scan => 'Presensi',
-      AppBottomDestination.history => 'Riwayat',
-      AppBottomDestination.profile => 'Profil',
-    };
-    _showComingSoon(context, label);
   }
 
 

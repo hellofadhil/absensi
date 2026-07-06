@@ -10,10 +10,12 @@ class AppBottomNavBar extends StatelessWidget {
     super.key,
     required this.selectedDestination,
     required this.onDestinationSelected,
+    this.isGuru = false,
   });
 
   final AppBottomDestination selectedDestination;
   final ValueChanged<AppBottomDestination> onDestinationSelected;
+  final bool isGuru;
 
   @override
   Widget build(BuildContext context) {
@@ -52,8 +54,8 @@ class AppBottomNavBar extends StatelessWidget {
                         onDestinationSelected(AppBottomDestination.home),
                   ),
                   _NavigationItem(
-                    label: 'Jadwal',
-                    icon: Icons.calendar_month_rounded,
+                    label: isGuru ? 'Siswa' : 'Jadwal',
+                    icon: isGuru ? Icons.people_alt_rounded : Icons.calendar_month_rounded,
                     isSelected:
                         selectedDestination == AppBottomDestination.calendar,
                     onTap: () =>

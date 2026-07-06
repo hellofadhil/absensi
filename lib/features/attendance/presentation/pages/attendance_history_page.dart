@@ -12,6 +12,7 @@ import '../../../../shared/widgets/app_card.dart';
 import '../../../../shared/widgets/app_scaffold.dart';
 import '../../../../shared/widgets/app_top_bar.dart';
 import '../../../../shared/widgets/section_header.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../providers/attendance_provider.dart';
 
@@ -32,6 +33,10 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     final selectedMonth = ref.watch(selectedCalendarMonthProvider);
     final historyAsync = ref.watch(attendanceHistoryProvider);
 
+    final authState = ref.watch(authProvider);
+    final user = authState is Authenticated ? authState.user : null;
+    final isGuru = user?.isGuru ?? false;
+
     return AppScaffold(
       topBar: AppTopBar(
         title: 'Riwayat Presensi',
@@ -40,8 +45,9 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       ),
       bottomNavigationBar: AppBottomNavBar(
         selectedDestination: AppBottomDestination.history,
+        isGuru: isGuru,
         onDestinationSelected: (destination) =>
-            _handleNavigation(context, destination),
+            _handleNavigation(context, destination, isGuru),
       ),
       body: historyAsync.when(
         loading: () => const Center(
@@ -283,11 +289,21 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
   void _handleNavigation(
     BuildContext context,
     AppBottomDestination destination,
+    bool isGuru,
   ) {
     if (destination == AppBottomDestination.history) return;
 
     if (destination == AppBottomDestination.home) {
       Navigator.pushReplacementNamed(context, RouteNames.home);
+      return;
+    }
+
+    if (destination == AppBottomDestination.calendar) {
+      if (isGuru) {
+        Navigator.pushReplacementNamed(context, RouteNames.students);
+      } else {
+        _showComingSoon(context, 'Jadwal');
+      }
       return;
     }
 
@@ -300,15 +316,6 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       Navigator.pushReplacementNamed(context, RouteNames.profile);
       return;
     }
-
-    final label = switch (destination) {
-      AppBottomDestination.home => 'Beranda',
-      AppBottomDestination.calendar => 'Jadwal',
-      AppBottomDestination.scan => 'Presensi',
-      AppBottomDestination.history => 'Riwayat',
-      AppBottomDestination.profile => 'Profil',
-    };
-    _showComingSoon(context, label);
   }
 
   void _showComingSoon(BuildContext context, String label) {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/repositories/attendance_repository_impl.dart';
 import '../../domain/entities/attendance_record.dart';
+import '../../domain/entities/student_attendance.dart';
 import '../../domain/repositories/attendance_repository.dart';
 
 final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
@@ -72,6 +73,12 @@ final todayAttendanceProvider = FutureProvider<AttendanceRecord?>((ref) async {
   return null;
 });
 
+// FutureProvider that fetches today's student attendance for teachers
+final todayStudentsAttendanceProvider = FutureProvider<List<StudentAttendance>>((ref) async {
+  final repo = ref.watch(attendanceRepositoryProvider);
+  return repo.getTodayStudentsAttendance();
+});
+
 // Notifier for manual attendance submission
 class AttendanceSubmissionNotifier extends Notifier<AsyncValue<void>> {
   @override
@@ -96,6 +103,7 @@ class AttendanceSubmissionNotifier extends Notifier<AsyncValue<void>> {
       ref.invalidate(attendanceHistoryProvider);
       ref.invalidate(todayAttendanceProvider);
       ref.invalidate(currentMonthAttendanceHistoryProvider);
+      ref.invalidate(todayStudentsAttendanceProvider);
       return true;
     } catch (e, stack) {
       state = AsyncError(e, stack);
