@@ -1,0 +1,60 @@
+name: Firebase App Distribution
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Catatan Rilis (Release Notes)'
+        required: false
+        default: 'Pembaruan versi terbaru E-AbsensiQu'
+        type: string
+      testers_group:
+        description: 'Nama grup tester di Firebase Console'
+        required: false
+        default: 'testers'
+        type: string
+
+jobs:
+  build-and-distribute:
+    name: Build & Upload to Firebase
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Create .env Configuration
+        run: |
+          if [ -n "${{ secrets.ENV_FILE }}" ]; then
+            echo "${{ secrets.ENV_FILE }}" > .env
+          else
+            cp .env.example .env
+          fi
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Android Release APK
+        run: flutter build apk --release
+
+      - name: Upload APK to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID || '1:36226996072:android:ae5643f632fe32634ea8dd' }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          groups: ${{ github.event.inputs.testers_group }}
+          releaseNotes: ${{ github.event.inputs.release_notes }}
+          file: build/app/outputs/flutter-apk/app-release.apk
