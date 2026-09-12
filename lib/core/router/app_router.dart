@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../features/attendance/presentation/pages/attendance_history_page.dart';
 import '../../features/attendance/presentation/pages/student_list_page.dart';
+import '../../features/attendance/presentation/pages/laporan_page.dart';
+import '../../features/attendance/presentation/pages/database_page.dart';
 import '../../features/auth/presentation/pages/auth_gate.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
@@ -15,6 +17,8 @@ abstract final class AppRouter {
       RouteNames.history => const AttendanceHistoryPage(),
       RouteNames.profile => const ProfilePage(),
       RouteNames.students => const StudentListPage(),
+      RouteNames.laporan => const LaporanPage(),
+      RouteNames.database => const DatabasePage(),
       _ => const AuthGate(),
     };
 

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shadows.dart';
 
-enum AppBottomDestination { home, calendar, scan, history, profile }
+enum AppBottomDestination { home, calendar, scan, history, profile, laporan, database }
 
 class AppBottomNavBar extends StatelessWidget {
   const AppBottomNavBar({
@@ -11,11 +11,13 @@ class AppBottomNavBar extends StatelessWidget {
     required this.selectedDestination,
     required this.onDestinationSelected,
     this.isGuru = false,
+    this.isAdmin = false,
   });
 
   final AppBottomDestination selectedDestination;
   final ValueChanged<AppBottomDestination> onDestinationSelected;
   final bool isGuru;
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -54,12 +56,21 @@ class AppBottomNavBar extends StatelessWidget {
                         onDestinationSelected(AppBottomDestination.home),
                   ),
                   _NavigationItem(
-                    label: isGuru ? 'Siswa' : 'Jadwal',
-                    icon: isGuru ? Icons.people_alt_rounded : Icons.calendar_month_rounded,
-                    isSelected:
-                        selectedDestination == AppBottomDestination.calendar,
-                    onTap: () =>
-                        onDestinationSelected(AppBottomDestination.calendar),
+                    label: isAdmin
+                        ? 'Laporan'
+                        : (isGuru ? 'Siswa' : 'Jadwal'),
+                    icon: isAdmin
+                        ? Icons.analytics_rounded
+                        : (isGuru
+                            ? Icons.people_alt_rounded
+                            : Icons.calendar_month_rounded),
+                    isSelected: selectedDestination ==
+                        (isAdmin
+                            ? AppBottomDestination.laporan
+                            : AppBottomDestination.calendar),
+                    onTap: () => onDestinationSelected(isAdmin
+                        ? AppBottomDestination.laporan
+                        : AppBottomDestination.calendar),
                   ),
                   const Expanded(child: SizedBox()),
                   _NavigationItem(
@@ -84,12 +95,16 @@ class AppBottomNavBar extends StatelessWidget {
             Positioned(
               top: 14,
               child: Semantics(
-                label: 'Presensi',
+                label: isAdmin ? 'Database' : 'Presensi',
                 button: true,
-                selected: selectedDestination == AppBottomDestination.scan,
+                selected: selectedDestination ==
+                    (isAdmin
+                        ? AppBottomDestination.database
+                        : AppBottomDestination.scan),
                 child: InkResponse(
-                  onTap: () =>
-                      onDestinationSelected(AppBottomDestination.scan),
+                  onTap: () => onDestinationSelected(isAdmin
+                      ? AppBottomDestination.database
+                      : AppBottomDestination.scan),
                   radius: 36,
                   child: Container(
                     width: 64,
@@ -106,7 +121,9 @@ class AppBottomNavBar extends StatelessWidget {
                           : AppShadows.ai,
                     ),
                     child: Icon(
-                      Icons.qr_code_scanner_rounded,
+                      isAdmin
+                          ? Icons.storage_rounded
+                          : Icons.qr_code_scanner_rounded,
                       color: context.appColors.textInverse,
                       size: 31,
                     ),
@@ -117,9 +134,12 @@ class AppBottomNavBar extends StatelessWidget {
             Positioned(
               top: 84,
               child: Text(
-                'Presensi',
+                isAdmin ? 'Database' : 'Presensi',
                 style: TextStyle(
-                  color: selectedDestination == AppBottomDestination.scan
+                  color: selectedDestination ==
+                          (isAdmin
+                              ? AppBottomDestination.database
+                              : AppBottomDestination.scan)
                       ? context.appColors.primary
                       : context.appColors.textSecondary,
                   fontSize: 12,

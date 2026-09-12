@@ -56,7 +56,7 @@ class AbsensiApp extends StatelessWidget {
       child: ValueListenableBuilder<ThemeMode>(
         valueListenable: themeController,
         builder: (context, themeMode, _) => MaterialApp(
-          title: 'Absensi Sekolah',
+          title: 'E-AbsensiQu',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,

@@ -5,6 +5,7 @@ import 'package:absensi/core/theme/app_colors.dart';
 import 'package:absensi/core/theme/app_spacing.dart';
 import 'package:absensi/features/home/presentation/pages/home_page.dart';
 import 'package:absensi/features/auth/presentation/providers/auth_provider.dart';
+import 'complete_profile_page.dart';
 import 'login_page.dart';
 
 class AuthGate extends ConsumerWidget {
@@ -47,6 +48,9 @@ class AuthGate extends ConsumerWidget {
     }
 
     if (authState is Authenticated) {
+      if (authState.user.needsProfileCompletion) {
+        return CompleteProfilePage(user: authState.user);
+      }
       return const HomePage();
     }
 

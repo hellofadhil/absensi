@@ -13,8 +13,13 @@ import '../../../../shared/widgets/app_scaffold.dart';
 import '../../../../shared/widgets/app_top_bar.dart';
 import '../../../../shared/widgets/section_header.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
-import '../../domain/entities/attendance_record.dart';
-import '../providers/attendance_provider.dart';
+import '../../../../shared/widgets/app_toast.dart';
+import 'package:absensi/features/attendance/domain/entities/attendance_record.dart';
+import 'package:absensi/features/attendance/presentation/providers/attendance_provider.dart';
+import 'package:absensi/core/services/holiday_service.dart';
+import 'package:absensi/shared/widgets/app_skeleton.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 
 class AttendanceHistoryPage extends ConsumerStatefulWidget {
   const AttendanceHistoryPage({super.key});
@@ -32,10 +37,16 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
   Widget build(BuildContext context) {
     final selectedMonth = ref.watch(selectedCalendarMonthProvider);
     final historyAsync = ref.watch(attendanceHistoryProvider);
+    final holidaysAsync = ref.watch(yearlyHolidaysProvider(selectedMonth.year));
+    final holidays = holidaysAsync.maybeWhen(
+      data: (data) => data,
+      orElse: () => const <String, HolidayItem>{},
+    );
 
     final authState = ref.watch(authProvider);
     final user = authState is Authenticated ? authState.user : null;
     final isGuru = user?.isGuru ?? false;
+    final isAdmin = user?.isAdmin ?? false;
 
     return AppScaffold(
       topBar: AppTopBar(
@@ -46,13 +57,12 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
       bottomNavigationBar: AppBottomNavBar(
         selectedDestination: AppBottomDestination.history,
         isGuru: isGuru,
+        isAdmin: isAdmin,
         onDestinationSelected: (destination) =>
-            _handleNavigation(context, destination, isGuru),
+            _handleNavigation(context, destination, isGuru, isAdmin),
       ),
       body: historyAsync.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(),
-        ),
+        loading: () => const AttendanceHistorySkeletonList(),
         error: (err, stack) => Center(
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.xl),
@@ -160,6 +170,7 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
                              r.date.day == _selectedDate!.day,
                       orElse: () => AttendanceRecord(date: _selectedDate!, status: AttendanceStatus.none),
                     ),
+                    holiday: holidays[HolidayService.formatDateKey(_selectedDate!)],
                   ),
                 ],
                 const SizedBox(height: AppSpacing.lg),
@@ -290,11 +301,22 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
     BuildContext context,
     AppBottomDestination destination,
     bool isGuru,
+    bool isAdmin,
   ) {
     if (destination == AppBottomDestination.history) return;
 
     if (destination == AppBottomDestination.home) {
       Navigator.pushReplacementNamed(context, RouteNames.home);
+      return;
+    }
+
+    if (destination == AppBottomDestination.laporan) {
+      Navigator.pushReplacementNamed(context, RouteNames.laporan);
+      return;
+    }
+
+    if (destination == AppBottomDestination.database) {
+      Navigator.pushReplacementNamed(context, RouteNames.database);
       return;
     }
 
@@ -319,85 +341,11 @@ class _AttendanceHistoryPageState extends ConsumerState<AttendanceHistoryPage> {
   }
 
   void _showComingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(milliseconds: 1800),
-          content: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.md,
-            ),
-            decoration: BoxDecoration(
-              color: context.appColors.primarySoft,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: context.appColors.primary.withValues(alpha: 0.3),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: context.appColors.primary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: context.appColors.primary.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.info_outline_rounded,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Segera Hadir!',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: context.appColors.primaryDeep,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Fitur $label sedang dalam tahap pengembangan.',
-                        style: TextStyle(
-                          color: context.appColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+    AppToast.showInfo(
+      context,
+      title: 'Segera Hadir!',
+      message: 'Fitur $label sedang dalam tahap pengembangan.',
+    );
   }
 }
 
@@ -688,7 +636,7 @@ class _PeriodPickerBottomSheetState extends State<_PeriodPickerBottomSheet> {
   }
 }
 
-class _CalendarGrid extends StatelessWidget {
+class _CalendarGrid extends ConsumerWidget {
   const _CalendarGrid({
     required this.selectedMonth,
     required this.records,
@@ -702,7 +650,7 @@ class _CalendarGrid extends StatelessWidget {
   final ValueChanged<DateTime> onDateSelected;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final daysInMonth = DateTime(selectedMonth.year, selectedMonth.month + 1, 0).day;
     final firstDayWeekday = DateTime(selectedMonth.year, selectedMonth.month, 1).weekday;
     
@@ -713,6 +661,11 @@ class _CalendarGrid extends StatelessWidget {
     final totalRows = (totalCells / 7).ceil();
 
     final weekdays = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+    final holidaysAsync = ref.watch(yearlyHolidaysProvider(selectedMonth.year));
+    final holidays = holidaysAsync.maybeWhen(
+      data: (data) => data,
+      orElse: () => const <String, HolidayItem>{},
+    );
 
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
@@ -779,6 +732,9 @@ class _CalendarGrid extends StatelessWidget {
                         selectedDate!.month == date.month &&
                         selectedDate!.day == date.day;
 
+                    final holiday = holidays[HolidayService.formatDateKey(date)];
+                    final isHoliday = holiday != null;
+
                     return Expanded(
                       child: SizedBox(
                         height: 44.0,
@@ -788,6 +744,7 @@ class _CalendarGrid extends StatelessWidget {
                           child: _CalendarCell(
                             record: record,
                             isSelected: isSelected,
+                            isHoliday: isHoliday,
                           ),
                         ),
                       ),
@@ -817,6 +774,7 @@ class _CalendarGrid extends StatelessWidget {
                 _LegendItem(label: 'Terlambat', color: context.appColors.warning),
                 _LegendItem(label: 'Sakit/Izin', color: context.appColors.primary),
                 _LegendItem(label: 'Alpa', color: context.appColors.danger),
+                _LegendItem(label: 'Libur', color: context.appColors.danger),
               ],
             ),
           ),
@@ -866,10 +824,12 @@ class _CalendarCell extends StatelessWidget {
   const _CalendarCell({
     required this.record,
     required this.isSelected,
+    this.isHoliday = false,
   });
 
   final AttendanceRecord record;
   final bool isSelected;
+  final bool isHoliday;
 
   @override
   Widget build(BuildContext context) {
@@ -895,6 +855,10 @@ class _CalendarCell extends StatelessWidget {
       borderOutlineColor = context.appColors.primary.withValues(alpha: 0.3);
       textColor = context.appColors.primary;
     } else if (record.isAlpa) {
+      backgroundColor = context.appColors.dangerSoft;
+      borderOutlineColor = context.appColors.danger.withValues(alpha: 0.3);
+      textColor = context.appColors.danger;
+    } else if (isHoliday) {
       backgroundColor = context.appColors.dangerSoft;
       borderOutlineColor = context.appColors.danger.withValues(alpha: 0.3);
       textColor = context.appColors.danger;
@@ -952,10 +916,12 @@ class _SelectedDateDetailBox extends StatelessWidget {
   const _SelectedDateDetailBox({
     required this.date,
     required this.record,
+    this.holiday,
   });
 
   final DateTime date;
   final AttendanceRecord record;
+  final HolidayItem? holiday;
 
   String _formatIndonesianFullDate(DateTime date) {
     final weekdays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -973,6 +939,7 @@ class _SelectedDateDetailBox extends StatelessWidget {
     final isFuture = date.isAfter(todayMidnight);
     final isWeekend = date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
     final hasStatus = record.status != AttendanceStatus.none;
+    final isApiHoliday = holiday != null;
 
     String statusText = '';
     String subStatusText = '';
@@ -1014,6 +981,12 @@ class _SelectedDateDetailBox extends StatelessWidget {
       subStatusText = 'Tidak hadir tanpa keterangan';
       textColor = context.appColors.danger;
       icon = Icons.cancel_outlined;
+      iconColor = context.appColors.danger;
+    } else if (isApiHoliday) {
+      statusText = holiday!.isNationalHoliday ? 'Hari Libur Nasional' : 'Cuti Bersama';
+      subStatusText = holiday!.name;
+      textColor = context.appColors.danger;
+      icon = Icons.event_busy_rounded;
       iconColor = context.appColors.danger;
     } else {
       // status is none
@@ -1275,6 +1248,33 @@ class _AttendanceLogTile extends StatelessWidget {
                           color: context.appColors.textSecondary,
                           fontStyle: FontStyle.italic,
                         ),
+                  ),
+                ],
+                if (record.attachmentUrl != null) ...[
+                  const SizedBox(height: 4),
+                  InkWell(
+                    onTap: () async {
+                      final uri = Uri.parse(record.attachmentUrl!);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.attachment_rounded, size: 14, color: context.appColors.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Lihat Surat (Kora Drive)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.appColors.primary,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ],

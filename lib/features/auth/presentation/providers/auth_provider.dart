@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user.dart';
@@ -63,10 +64,24 @@ class AuthNotifier extends Notifier<AuthState> {
       if (user != null) {
         state = Authenticated(user);
       } else {
-        state = const AuthError('Gagal masuk. Silakan coba lagi.');
+        state = const AuthError('Email atau kata sandi salah. Silakan coba lagi.');
       }
     } catch (e) {
-      final message = e.toString().replaceAll('Exception: ', '');
+      String message = 'Terjadi kesalahan. Silakan coba lagi.';
+      if (e is FirebaseAuthException) {
+        if (e.code == 'user-not-found') {
+          message = 'Email belum terdaftar.';
+        } else if (e.code == 'wrong-password' ||
+            e.code == 'invalid-credential' ||
+            e.code == 'invalid-email' ||
+            e.code == 'email-already-in-use') {
+          message = 'Email atau kata sandi salah. Silakan coba lagi.';
+        } else {
+          message = e.message ?? message;
+        }
+      } else {
+        message = e.toString().replaceAll('Exception: ', '');
+      }
       state = AuthError(message);
     }
   }
@@ -98,3 +113,8 @@ class AuthNotifier extends Notifier<AuthState> {
 }
 
 final authProvider = NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new);
+
+final allUsersProvider = FutureProvider<List<AppUser>>((ref) async {
+  final repo = ref.watch(authRepositoryProvider);
+  return repo.getAllUsers();
+});

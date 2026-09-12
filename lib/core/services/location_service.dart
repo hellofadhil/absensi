@@ -25,11 +25,19 @@ class LocationService {
       );
     } 
 
-    return await Geolocator.getCurrentPosition(
+    final position = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
       ),
     );
+
+    if (position.isMocked) {
+      throw Exception(
+        'Terdeteksi penggunaan Lokasi Palsu (Fake GPS). Harap matikan aplikasi Fake GPS untuk melanjutkan presensi.',
+      );
+    }
+
+    return position;
   }
 }
 

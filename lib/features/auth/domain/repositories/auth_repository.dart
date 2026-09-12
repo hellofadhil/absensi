@@ -5,4 +5,9 @@ abstract interface class AuthRepository {
   Future<void> logout();
   Future<AppUser?> getCurrentUser();
   Future<void> updateProfile(String uid, AppUser user);
+  Future<void> updateUser(AppUser user);
+  Future<List<AppUser>> getAllUsers();
+  Future<void> createUser(AppUser user, {String? password});
+  Future<void> deleteUser(String uid);
+  Future<void> sendPasswordResetEmail(String email);
 }

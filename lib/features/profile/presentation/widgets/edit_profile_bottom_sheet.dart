@@ -179,21 +179,14 @@ class _EditProfileBottomSheetState extends ConsumerState<EditProfileBottomSheet>
   void initState() {
     super.initState();
     final u = widget.user;
-    final isSiswa = u.isSiswa;
     _displayNameController = TextEditingController(text: u.displayName);
-    _nicknameController = TextEditingController(text: u.nickname);
-    _birthDateController = TextEditingController(
-      text: u.birthDate ?? (isSiswa ? '12 Oktober 2008' : '12 Mei 1982'),
-    );
-    _addressController = TextEditingController(
-      text: u.address ?? 'Jl. Jenderal Sudirman No. 45, Kota Bandung',
-    );
+    _nicknameController = TextEditingController(text: u.nickname ?? '');
+    _birthDateController = TextEditingController(text: u.birthDate ?? '');
+    _addressController = TextEditingController(text: u.address ?? '');
     _phoneNumberController = TextEditingController(
-      text: _formatPhoneNumberForUi(u.phoneNumber ?? (isSiswa ? '0812-3456-7890' : '0857-9988-1122')),
+      text: _formatPhoneNumberForUi(u.phoneNumber),
     );
-    _extraFieldController = TextEditingController(
-      text: u.extraField ?? (isSiswa ? 'Rekayasa Perangkat Lunak' : 'Wali Kelas & Staf Kurikulum'),
-    );
+    _extraFieldController = TextEditingController(text: u.extraField ?? '');
   }
 
   @override
@@ -340,12 +333,15 @@ class _EditProfileBottomSheetState extends ConsumerState<EditProfileBottomSheet>
                 ),
                 const SizedBox(height: AppSpacing.md),
 
-                _buildTextField(
-                  label: isSiswa ? 'Jurusan' : 'Jabatan / Peran',
-                  controller: _extraFieldController,
-                  icon: Icons.workspace_premium_outlined,
-                ),
-                const SizedBox(height: AppSpacing.xl),
+                if (isSiswa) ...[
+                  _buildTextField(
+                    label: 'Jurusan',
+                    controller: _extraFieldController,
+                    icon: Icons.workspace_premium_outlined,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                const SizedBox(height: AppSpacing.lg),
 
                 // Buttons
                 Row(

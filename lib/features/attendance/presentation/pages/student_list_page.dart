@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:absensi/core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_radius.dart';
+import '../widgets/manual_attendance_bottom_sheet.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_bottom_nav_bar.dart';
 import '../../../../shared/widgets/app_card.dart';
 import '../../../../shared/widgets/app_scaffold.dart';
 import '../../../../shared/widgets/app_top_bar.dart';
-import '../../domain/entities/attendance_record.dart';
-import '../../domain/entities/student_attendance.dart';
-import '../providers/attendance_provider.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
+import 'package:absensi/features/attendance/domain/entities/attendance_record.dart';
+import 'package:absensi/features/attendance/domain/entities/student_attendance.dart';
+import 'package:absensi/features/attendance/presentation/providers/attendance_provider.dart';
+import 'package:absensi/features/auth/presentation/providers/auth_provider.dart';
+import 'package:absensi/shared/widgets/app_skeleton.dart';
 
 class StudentListPage extends ConsumerStatefulWidget {
   const StudentListPage({super.key});
@@ -30,6 +32,7 @@ class _StudentListPageState extends ConsumerState<StudentListPage> {
     final authState = ref.watch(authProvider);
     final user = authState is Authenticated ? authState.user : null;
     final isGuru = user?.isGuru ?? false;
+    final isAdmin = user?.isAdmin ?? false;
 
     return AppScaffold(
       topBar: const AppTopBar(
@@ -40,18 +43,15 @@ class _StudentListPageState extends ConsumerState<StudentListPage> {
       bottomNavigationBar: AppBottomNavBar(
         selectedDestination: AppBottomDestination.calendar,
         isGuru: isGuru,
-        onDestinationSelected: (destination) {
-          if (destination == AppBottomDestination.home) {
-            Navigator.pushReplacementNamed(context, RouteNames.home);
-          } else if (destination == AppBottomDestination.history) {
-            Navigator.pushReplacementNamed(context, RouteNames.history);
-          } else if (destination == AppBottomDestination.profile) {
-            Navigator.pushReplacementNamed(context, RouteNames.profile);
-          }
-        },
+        isAdmin: isAdmin,
+        onDestinationSelected: (destination) =>
+            _handleNavigation(context, destination, isGuru, isAdmin),
       ),
       body: studentsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppSpacing.xl),
+          child: StudentListSkeletonList(),
+        ),
         error: (err, stack) => Center(
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.xl),
@@ -188,7 +188,13 @@ class _StudentListPageState extends ConsumerState<StudentListPage> {
 
                     return groups.entries.map((entry) {
                       final groupName = entry.key;
-                      final studentsInGroup = entry.value;
+                      final studentsInGroup = List<StudentAttendance>.from(entry.value)
+                        ..sort((a, b) {
+                          final noA = a.attendanceNumber ?? 999;
+                          final noB = b.attendanceNumber ?? 999;
+                          if (noA != noB) return noA.compareTo(noB);
+                          return a.studentName.compareTo(b.studentName);
+                        });
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -233,7 +239,7 @@ class _StudentListPageState extends ConsumerState<StudentListPage> {
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: studentsInGroup.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+                            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
                             itemBuilder: (context, idx) {
                               final student = studentsInGroup[idx];
                               return _StudentCard(student: student);
@@ -251,6 +257,45 @@ class _StudentListPageState extends ConsumerState<StudentListPage> {
         },
       ),
     );
+  }
+
+  void _handleNavigation(
+    BuildContext context,
+    AppBottomDestination destination,
+    bool isGuru,
+    bool isAdmin,
+  ) {
+    if (destination == AppBottomDestination.calendar) return;
+
+    if (destination == AppBottomDestination.home) {
+      Navigator.pushReplacementNamed(context, RouteNames.home);
+      return;
+    }
+
+    if (destination == AppBottomDestination.laporan) {
+      Navigator.pushReplacementNamed(context, RouteNames.laporan);
+      return;
+    }
+
+    if (destination == AppBottomDestination.database) {
+      Navigator.pushReplacementNamed(context, RouteNames.database);
+      return;
+    }
+
+    if (destination == AppBottomDestination.history) {
+      Navigator.pushReplacementNamed(context, RouteNames.history);
+      return;
+    }
+
+    if (destination == AppBottomDestination.scan) {
+      ManualAttendanceBottomSheet.show(context);
+      return;
+    }
+
+    if (destination == AppBottomDestination.profile) {
+      Navigator.pushReplacementNamed(context, RouteNames.profile);
+      return;
+    }
   }
 
   Widget _buildFilterChip(String label) {
@@ -352,19 +397,75 @@ class _StudentCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      student.studentName,
-                      style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: context.appColors.textPrimary,
+                    Row(
+                      children: [
+                        if (student.attendanceNumber != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(
+                              color: context.appColors.primarySoft,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: context.appColors.primaryBorder),
+                            ),
+                            child: Text(
+                              'No. ${student.attendanceNumber.toString().padLeft(2, '0')}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: context.appColors.primary,
+                              ),
+                            ),
                           ),
+                        ],
+                        Expanded(
+                          child: Text(
+                            student.studentName,
+                            style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: context.appColors.textPrimary,
+                                ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      student.email,
-                      style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                            color: context.appColors.textMuted,
+                    Row(
+                      children: [
+                        if (student.formattedAngkatan != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 1),
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(
+                              color: context.appColors.surfaceSoft,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                  color: context.appColors.border),
+                            ),
+                            child: Text(
+                              student.formattedAngkatan!,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: context.appColors.textSecondary,
+                              ),
+                            ),
                           ),
+                        ],
+                        Expanded(
+                          child: Text(
+                            student.email,
+                            style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                                  color: context.appColors.textMuted,
+                                ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -418,6 +519,35 @@ class _StudentCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (student.record!.attachmentUrl != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              InkWell(
+                onTap: () async {
+                  final uri = Uri.parse(student.record!.attachmentUrl!);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.attachment_rounded, size: 14, color: context.appColors.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Lihat Surat Dokter/Izin (Kora Drive)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: context.appColors.primary,
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ] else if (student.phoneNumber != null) ...[
             const Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),

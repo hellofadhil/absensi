@@ -14,6 +14,7 @@ class AppTopBar extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
+    this.logoPath,
     this.showBackButton = false,
     this.showLanguageSelector = false,
     this.selectedLanguage = 'English',
@@ -35,6 +36,7 @@ class AppTopBar extends StatelessWidget {
 
   final String title;
   final String? subtitle;
+  final String? logoPath;
   final bool showBackButton;
   final bool showLanguageSelector;
   final String selectedLanguage;
@@ -85,6 +87,27 @@ class AppTopBar extends StatelessWidget {
                 onTap: onBackTap ?? () => Navigator.of(context).pop(),
               ),
               const SizedBox(width: AppSpacing.sm),
+            ],
+            if (logoPath != null) ...[
+              Container(
+                width: 40,
+                height: 40,
+                margin: const EdgeInsets.only(right: AppSpacing.sm),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: context.appColors.primary.withAlpha(40),
+                    width: 1.5,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8.5),
+                  child: Image.asset(
+                    logoPath!,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
             ],
             Expanded(
               child: Column(

@@ -8,6 +8,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_scaffold.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../providers/auth_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -76,6 +77,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         );
       }
 
+      if (next is AuthError) {
+        AppToast.showError(
+          context,
+          title: 'Login Gagal',
+          message: next.message,
+        );
+      }
+
       if (next is Authenticated) {
         Navigator.pushReplacementNamed(context, RouteNames.home);
       }
@@ -92,35 +101,35 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Logo & App Name Header
-                Center(
-                  child: Container(
-                    width: 88,
-                    height: 88,
-                    decoration: BoxDecoration(
-                      color: context.appColors.primarySoft,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: context.appColors.primaryBorder,
-                        width: 2.5,
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.school_rounded,
-                      size: 44,
-                      color: context.appColors.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Text(
-                  'Presensi Sekolah',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium!.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                        color: context.appColors.textPrimary,
-                      ),
-                ),
+                 Center(
+                   child: Container(
+                     width: 88,
+                     height: 88,
+                     decoration: BoxDecoration(
+                       shape: BoxShape.circle,
+                       border: Border.all(
+                         color: context.appColors.primaryBorder,
+                         width: 2.5,
+                       ),
+                     ),
+                     child: ClipOval(
+                       child: Image.asset(
+                         'assets/logo.jpg',
+                         fit: BoxFit.cover,
+                       ),
+                     ),
+                   ),
+                 ),
+                 const SizedBox(height: AppSpacing.xl),
+                 Text(
+                   'E-AbsensiQu',
+                   textAlign: TextAlign.center,
+                   style: Theme.of(context).textTheme.headlineMedium!.copyWith(
+                         fontWeight: FontWeight.w800,
+                         letterSpacing: -0.5,
+                         color: context.appColors.textPrimary,
+                       ),
+                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   'Masuk dengan akun sekolah untuk mencatat kehadiran hari ini.',
@@ -136,43 +145,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Error State Message
-                      if (authState is AuthError) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(AppSpacing.md),
-                          decoration: BoxDecoration(
-                            color: context.appColors.dangerSoft,
-                            borderRadius: BorderRadius.circular(AppRadius.small),
-                            border: Border.all(
-                              color: context.appColors.danger.withValues(alpha: 0.25),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.error_outline_rounded,
-                                color: context.appColors.danger,
-                                size: 22,
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: Text(
-                                  authState.message,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall!
-                                      .copyWith(
-                                        color: context.appColors.danger,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                      ],
 
                       // Email Field
                       TextFormField(

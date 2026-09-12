@@ -1,16 +1,22 @@
+import 'dart:io';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/services/holiday_service.dart';
+import '../../../../core/services/kora_drive_service.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/attendance_record.dart';
 import '../providers/attendance_provider.dart';
+import '../../../school/presentation/providers/school_provider.dart';
 
 class ManualAttendanceBottomSheet extends ConsumerStatefulWidget {
   const ManualAttendanceBottomSheet({super.key});
@@ -36,6 +42,41 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
   late AttendanceStatus _selectedStatus;
   late final TextEditingController _remarksController;
   bool _isLocating = false;
+  bool _isUploadingAttachment = false;
+  XFile? _selectedAttachment;
+
+  Future<void> _pickAttachment(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+      if (picked != null) {
+        setState(() {
+          _selectedAttachment = picked;
+        });
+      }
+    } on MissingPluginException {
+      if (mounted) {
+        _showErrorDialog(
+          context: context,
+          title: 'Perlu Restart Aplikasi',
+          message: 'Package native `image_picker` baru saja ditambahkan. Harap Hentikan (Stop) aplikasi dan jalankan ulang (`flutter run`) dari terminal/IDE agar native plugin terdaftar penuh di perangkat/emulator.',
+          buttonLabel: 'Mengerti',
+          onButtonPressed: () => Navigator.pop(context),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.showError(
+          context,
+          title: 'Gagal Memilih Foto',
+          message: 'Terjadi kesalahan saat memilih foto: ${e.toString().replaceAll('Exception: ', '')}',
+        );
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -75,13 +116,29 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
     } 
 
     try {
-      return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 7),
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 7),
+        ),
       );
-    } catch (_) {
+      if (position.isMocked) {
+        throw Exception(
+          'Terdeteksi penggunaan Lokasi Palsu (Fake GPS). Harap matikan aplikasi Fake GPS untuk melakukan presensi.',
+        );
+      }
+      return position;
+    } catch (e) {
+      if (e.toString().contains('Lokasi Palsu') || e.toString().contains('Fake GPS')) {
+        rethrow;
+      }
       final lastKnown = await Geolocator.getLastKnownPosition();
       if (lastKnown != null) {
+        if (lastKnown.isMocked) {
+          throw Exception(
+            'Terdeteksi penggunaan Lokasi Palsu (Fake GPS). Harap matikan aplikasi Fake GPS untuk melakukan presensi.',
+          );
+        }
         return lastKnown;
       }
       throw Exception('Gagal mendapatkan koordinat GPS. Pastikan Anda berada di area terbuka atau aktifkan akurasi tinggi GPS.');
@@ -172,6 +229,18 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
 
   Future<void> _handleSubmit() async {
     if (_formKey.currentState?.validate() ?? false) {
+      final holiday = await ref.read(todayHolidayProvider.future);
+      if (holiday.isHoliday) {
+        if (mounted) {
+          AppToast.showInfo(
+            context,
+            title: 'Hari Libur',
+            message: 'Presensi hari ini dinonaktifkan karena ${holiday.holidayList.join(', ')}.',
+          );
+        }
+        return;
+      }
+
       DateTime? checkInDateTime;
       double? latitude;
       double? longitude;
@@ -183,6 +252,33 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
           if (position != null) {
             latitude = position.latitude;
             longitude = position.longitude;
+
+            // Fetch dynamic school info configurations
+            final schoolInfo = await ref.read(schoolInfoProvider.future);
+            final double schoolLatitude = schoolInfo.latitude;
+            final double schoolLongitude = schoolInfo.longitude;
+            final double maxRadiusInMeters = schoolInfo.radius;
+
+            final distance = Geolocator.distanceBetween(
+              latitude,
+              longitude,
+              schoolLatitude,
+              schoolLongitude,
+            );
+
+            if (distance > maxRadiusInMeters) {
+              setState(() => _isLocating = false);
+              if (mounted) {
+                _showErrorDialog(
+                  context: context,
+                  title: 'Di Luar Radius Sekolah',
+                  message: 'Anda terdeteksi berada ${distance.toStringAsFixed(1)} meter dari sekolah. Presensi Kehadiran hanya dapat dilakukan jika Anda berada dalam radius $maxRadiusInMeters meter dari area ${schoolInfo.name}.',
+                  buttonLabel: 'Mengerti',
+                  onButtonPressed: () => Navigator.pop(context),
+                );
+              }
+              return;
+            }
           }
         } catch (e) {
           setState(() => _isLocating = false);
@@ -193,7 +289,11 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
             String buttonLabel = 'Mengerti';
             VoidCallback onButtonPressed = () => Navigator.pop(context);
 
-            if (errorMsg.contains('Layanan lokasi dinonaktifkan')) {
+            if (errorMsg.contains('Lokasi Palsu') || errorMsg.contains('Fake GPS')) {
+              title = 'Lokasi Palsu Terdeteksi';
+              buttonLabel = 'Mengerti';
+              onButtonPressed = () => Navigator.pop(context);
+            } else if (errorMsg.contains('Layanan lokasi dinonaktifkan')) {
               title = 'GPS Tidak Aktif';
               buttonLabel = 'Aktifkan Sekarang';
               onButtonPressed = () async {
@@ -244,6 +344,31 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
         }
       }
 
+      String? attachmentUrl;
+      if (_selectedStatus != AttendanceStatus.hadir && _selectedAttachment != null) {
+        setState(() => _isUploadingAttachment = true);
+        try {
+          final uploadResult = await KoraDriveService.uploadFile(
+            File(_selectedAttachment!.path),
+            targetDir: 'Storage/absensiQu',
+          );
+          attachmentUrl = uploadResult.url;
+        } catch (e) {
+          setState(() => _isUploadingAttachment = false);
+          if (mounted) {
+            _showErrorDialog(
+              context: context,
+              title: 'Gagal Upload Kora Drive',
+              message: e.toString().replaceAll('Exception: ', ''),
+              buttonLabel: 'Coba Lagi',
+              onButtonPressed: () => Navigator.pop(context),
+            );
+          }
+          return;
+        }
+        setState(() => _isUploadingAttachment = false);
+      }
+
       final record = AttendanceRecord(
         date: _selectedDate,
         status: finalStatus,
@@ -253,6 +378,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
             : null,
         latitude: latitude,
         longitude: longitude,
+        attachmentUrl: attachmentUrl,
       );
 
       final success = await ref.read(attendanceSubmissionProvider.notifier).submit(record);
@@ -271,7 +397,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
   @override
   Widget build(BuildContext context) {
     final submissionState = ref.watch(attendanceSubmissionProvider);
-    final isLoading = submissionState.isLoading || _isLocating;
+    final isLoading = submissionState.isLoading || _isLocating || _isUploadingAttachment;
 
     final authState = ref.watch(authProvider);
     final user = authState is Authenticated ? authState.user : null;
@@ -283,10 +409,24 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
       data: (record) => record != null,
       orElse: () => false,
     );
+    final todayHoliday = ref.watch(todayHolidayProvider);
+    final isHoliday = todayHoliday.maybeWhen(
+      data: (holiday) => holiday.isHoliday,
+      orElse: () => false,
+    );
+
+    final schoolInfo = ref.watch(schoolInfoProvider).maybeWhen(
+      data: (info) => info,
+      orElse: () => null,
+    );
+    final startTime = schoolInfo?.startTime ?? '07:00';
+    final lateTime = schoolInfo?.lateTime ?? '07:15';
 
     final String buttonLabel;
     if (hasCheckedIn) {
       buttonLabel = 'Selesai Check-in';
+    } else if (isHoliday) {
+      buttonLabel = 'Presensi Dinonaktifkan';
     } else if (isSiswa) {
       buttonLabel = switch (_selectedStatus) {
         AttendanceStatus.hadir => 'Check-in Sekarang',
@@ -367,6 +507,46 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                 ),
                 const SizedBox(height: AppSpacing.md),
 
+                todayHoliday.when(
+                  data: (holiday) {
+                    if (!holiday.isHoliday) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: context.appColors.warningSoft,
+                          borderRadius: BorderRadius.circular(AppRadius.button),
+                          border: Border.all(
+                            color: context.appColors.warning.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.event_busy_rounded, color: context.appColors.warning),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                'Hari ini libur: ${holiday.holidayList.join(', ')}. Presensi tidak perlu dilakukan.',
+                                style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                                      color: context.appColors.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
+                ),
+
                 // User Identity Card (for both Siswa and Guru)
                 if (user != null) ...[
                   Container(
@@ -383,7 +563,9 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                           radius: 22,
                           backgroundColor: context.appColors.primary,
                           child: Text(
-                            (user.displayName)[0].toUpperCase(),
+                            user.displayName.trim().isNotEmpty
+                                ? user.displayName.trim()[0].toUpperCase()
+                                : 'U',
                             style: TextStyle(
                               color: context.appColors.textInverse,
                               fontWeight: FontWeight.bold,
@@ -406,7 +588,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                               Text(
                                 user.isSiswa
                                     ? 'XII RPL 1 • NIS 123456'
-                                    : '${user.extraField ?? "Guru Matematika"} • NIP 19900815202607',
+                                    : (user.email.isNotEmpty ? user.email : 'Guru'),
                                 style: Theme.of(context).textTheme.bodySmall!.copyWith(
                                       color: context.appColors.textSecondary,
                                     ),
@@ -480,7 +662,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                       isSelected: _selectedStatus == AttendanceStatus.hadir,
                       selectedColor: context.appColors.success,
                       selectedBgColor: context.appColors.successSoft,
-                      onTap: hasCheckedIn ? null : () => setState(() => _selectedStatus = AttendanceStatus.hadir),
+                      onTap: hasCheckedIn || isHoliday ? null : () => setState(() => _selectedStatus = AttendanceStatus.hadir),
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     _StatusOption(
@@ -489,7 +671,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                       isSelected: _selectedStatus == AttendanceStatus.sakit,
                       selectedColor: context.appColors.warning,
                       selectedBgColor: context.appColors.warningSoft,
-                      onTap: hasCheckedIn ? null : () => setState(() => _selectedStatus = AttendanceStatus.sakit),
+                      onTap: hasCheckedIn || isHoliday ? null : () => setState(() => _selectedStatus = AttendanceStatus.sakit),
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     _StatusOption(
@@ -498,7 +680,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                       isSelected: _selectedStatus == AttendanceStatus.izin,
                       selectedColor: context.appColors.primary,
                       selectedBgColor: context.appColors.primarySoft,
-                      onTap: hasCheckedIn ? null : () => setState(() => _selectedStatus = AttendanceStatus.izin),
+                      onTap: hasCheckedIn || isHoliday ? null : () => setState(() => _selectedStatus = AttendanceStatus.izin),
                     ),
                   ],
                 ),
@@ -542,9 +724,10 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Menggunakan waktu server (Batas masuk: 07:00 • Batas terlambat: 07:15)',
+                    'Batas masuk: $startTime\nBatas Terlambat: $lateTime',
                     style: Theme.of(context).textTheme.bodySmall!.copyWith(
                           color: context.appColors.textSecondary,
+                          height: 1.4,
                         ),
                   ),
                 ] else ...[
@@ -557,7 +740,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                   const SizedBox(height: AppSpacing.xs),
                   TextFormField(
                     controller: _remarksController,
-                    enabled: !isLoading && !hasCheckedIn,
+                    enabled: !isLoading && !hasCheckedIn && !isHoliday,
                     maxLines: 3,
                     decoration: InputDecoration(
                       hintText: _selectedStatus == AttendanceStatus.sakit
@@ -589,6 +772,106 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                       return null;
                     },
                   ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Lampiran Foto Surat Dokter / Izin',
+                    style: Theme.of(context).textTheme.titleSmall!.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  if (_selectedAttachment == null) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: isLoading ? null : () => _pickAttachment(ImageSource.camera),
+                            icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                            label: const Text('Kamera'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: BorderSide(color: context.appColors.primary),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppRadius.button),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: isLoading ? null : () => _pickAttachment(ImageSource.gallery),
+                            icon: const Icon(Icons.photo_library_outlined, size: 18),
+                            label: const Text('Galeri'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: BorderSide(color: context.appColors.primary),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppRadius.button),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Opsional. Foto akan disimpan di Kora Drive (Storage/absensiQu).',
+                      style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                            color: context.appColors.textSecondary,
+                          ),
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: context.appColors.surfaceSoft,
+                        borderRadius: BorderRadius.circular(AppRadius.button),
+                        border: Border.all(color: context.appColors.primarySoft),
+                      ),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Image.file(
+                              File(_selectedAttachment!.path),
+                              width: 44,
+                              height: 44,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _selectedAttachment!.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Siap diunggah ke Kora Drive',
+                                  style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                                        color: context.appColors.success,
+                                        fontSize: 11,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline_rounded, color: context.appColors.danger),
+                            onPressed: isLoading ? null : () => setState(() => _selectedAttachment = null),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: AppSpacing.xl),
 
@@ -659,7 +942,7 @@ class _ManualAttendanceBottomSheetState extends ConsumerState<ManualAttendanceBo
                             )
                           : AppPrimaryButton(
                               label: buttonLabel,
-                              onPressed: hasCheckedIn ? null : _handleSubmit,
+                              onPressed: hasCheckedIn || isHoliday ? null : _handleSubmit,
                             ),
                     ),
                   ],

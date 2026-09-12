@@ -4,4 +4,6 @@ abstract final class RouteNames {
   static const history = '/history';
   static const profile = '/profile';
   static const students = '/students';
+  static const laporan = '/laporan';
+  static const database = '/database';
 }

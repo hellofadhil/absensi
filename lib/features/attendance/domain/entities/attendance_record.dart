@@ -8,6 +8,7 @@ class AttendanceRecord {
     this.remarks,
     this.latitude,
     this.longitude,
+    this.attachmentUrl,
   });
 
   final DateTime date;
@@ -16,6 +17,7 @@ class AttendanceRecord {
   final String? remarks; // e.g., 'Surat Dokter' for sakit, 'Acara Keluarga' for izin, or late description
   final double? latitude;
   final double? longitude;
+  final String? attachmentUrl; // Kora Drive upload link or attachment URL for sakit/izin proof
 
   bool get isHadir => status == AttendanceStatus.hadir;
   bool get isTerlambat => status == AttendanceStatus.terlambat;
@@ -30,6 +32,7 @@ class AttendanceRecord {
     String? remarks,
     double? latitude,
     double? longitude,
+    String? attachmentUrl,
   }) {
     return AttendanceRecord(
       date: date ?? this.date,
@@ -38,6 +41,7 @@ class AttendanceRecord {
       remarks: remarks ?? this.remarks,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      attachmentUrl: attachmentUrl ?? this.attachmentUrl,
     );
   }
 }

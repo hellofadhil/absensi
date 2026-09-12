@@ -51,3 +51,12 @@ yarn-debug.log*
 yarn-error.log*
 .eslintcache
 
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Build & Scratch
+android/build/
+scratch/
+

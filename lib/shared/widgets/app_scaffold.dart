@@ -9,11 +9,15 @@ class AppScaffold extends StatelessWidget {
     required this.body,
     this.topBar,
     this.bottomNavigationBar,
+    this.floatingActionButton,
+    this.floatingActionButtonLocation,
   });
 
   final Widget body;
   final Widget? topBar;
   final Widget? bottomNavigationBar;
+  final Widget? floatingActionButton;
+  final FloatingActionButtonLocation? floatingActionButtonLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -35,11 +39,13 @@ class AppScaffold extends StatelessWidget {
         extendBody: true,
         backgroundColor: context.appColors.background,
         bottomNavigationBar: bottomNavigationBar,
+        floatingActionButton: floatingActionButton,
+        floatingActionButtonLocation: floatingActionButtonLocation,
         body: SafeArea(
           bottom: false,
           child: Column(
             children: [
-              if (topBar != null) topBar!,
+              ?topBar,
               Expanded(child: body),
             ],
           ),

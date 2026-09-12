@@ -1,58 +1,78 @@
-Ya, saya sangat memahami struktur dari proyek ini.                                                                              
-                                                                                                                                  
-  Berdasarkan analisis saya, proyek ini menggunakan arsitektur Feature-First (khas Flutter modular) yang memisahkan aplikasi      
-  berdasarkan fitur-fitur utamanya. Saat ini, template tersebut dikonfigurasi sebagai aplikasi belajar bahasa Inggris dengan      
-  beberapa bagian penting:                                                                                                        
-                                                                                                                                  
-  ### 1. Struktur Folder & Kode Saat Ini:                                                                                         
-                                                                                                                                  
-  •  lib/main.dart : Titik masuk utama aplikasi yang memanggil  EnglishLearningApp  dengan pengaturan tema ( ThemeController ) dan
-  Text-to-Speech ( TtsService ).                                                                                                  
-  •  lib/core/ : Berisi konfigurasi global seperti rute ( lib/core/router/app_router.dart  &  route_names.dart ) serta tema       
-  warna/tipografi.                                                                                                                
-  •  lib/features/ : Saat ini berisi fitur bertema bahasa Inggris seperti  ai_coach ,  listening_lab ,  mock_interview ,          
-  role_play ,  tiny_lesson , dll.                                                                                                 
-  •  lib/shared/ : Berisi widget kustom yang bisa dipakai di mana saja (seperti  AppBottomNavBar ,  AppCard ,  AppScaffold ).     
-  ──────                                                                                                                          
-  ### Rencana Migrasi ke Sistem Absensi Sekolah (Sistem Absensi)                                                                  
-                                                                                                                                  
-  Kita bisa memodifikasi template ini agar sesuai dengan kebutuhan sistem absensi sekolah. Berikut adalah langkah-langkah yang    
-  saya sarankan:                                                                                                                  
-                                                                                                                                  
-  #### Langkah 1: Pembersihan & Umbi (Cleanup & Rename)                                                                           
-                                                                                                                                  
-  1. Ubah identitas aplikasi di  pubspec.yaml  (dari  name: english  menjadi  name: absensi  atau nama lain).                     
-  2. Bersihkan dependencies yang tidak diperlukan (seperti  flutter_tts  atau  speech_to_text  jika tidak digunakan untuk absensi)
-  dan tambahkan package baru jika diperlukan (seperti  qr_code_scanner ,  geolocator  untuk presensi berbasis lokasi/GPS, atau    
-  camera  jika ingin absensi swafoto).                                                                                            
-  3. Hapus fitur bertema bahasa Inggris yang tidak diperlukan di  lib/features/  dan ganti dengan folder fitur baru.              
-                                                                                                                                  
-  #### Langkah 2: Buat Fitur Baru untuk Absensi                                                                                   
-                                                                                                                                  
-  Sesuai dengan arsitektur Feature-First, kita akan membagi sistem absensi ke beberapa fitur di dalam  lib/features/ :            
-                                                                                                                                  
-  1.  auth : Halaman masuk (Login) untuk Guru, Siswa, atau Admin.                                                                 
-  2.  home : Dashboard utama untuk Guru/Siswa (menampilkan status hari ini, riwayat singkat, dan tombol pintas absensi).          
-  3.  attendance : Halaman untuk melakukan absensi (bisa berupa tombol scan QR, absensi manual, absensi dengan validasi           
-  GPS/koordinat sekolah, atau kamera/swafoto).                                                                                    
-  4.  history : Riwayat presensi (Sakit, Izin, Hadir, Alfa) dalam bentuk kalender atau list.                                      
-  5.  class_management  (Khusus Guru/Admin): Mengelola data kelas dan siswa yang hadir hari ini.                                  
-                                                                                                                                  
-  #### Langkah 3: Integrasi Database & Autentikasi                                                                                
-                                                                                                                                  
-  Sesuai aturan di AGENTS.md, kita akan menggunakan:                                                                         
-                                                                                                                                  
-  • Firebase Auth: Untuk login guru dan murid.                                                                                    
-  • Cloud Firestore: Database untuk menyimpan riwayat kehadiran, data siswa, kelas, dan jadwal pelajaran.                         
-  • State Management (Riverpod): Untuk mengatur state halaman absensi agar reaktif dan bersih dari business logic di bagian UI.   
-  ──────                                                                                                                          
-  ### Bagaimana Kita Ingin Memulainya?                                                                                            
-                                                                                                                                  
-  Untuk memulainya, boleh tolong konfirmasikan beberapa hal berikut:                                                              
-                                                                                                                                  
-  1. Metode Presensi: Bagaimana cara siswa melakukan absensi? Apakah mereka memindai QR code, divalidasi dengan GPS/Lokasi,       
-  menggunakan swafoto (selfie), atau guru yang mencentang kehadirannya secara manual di aplikasi?                                 
-  2. Peran Pengguna (Roles): Apakah aplikasi ini akan digunakan oleh Siswa saja, Guru saja, atau Keduanya (dengan tampilan        
-  dashboard yang berbeda setelah login)?                                                                                          
-  3. Langkah Pertama: Apakah Anda ingin kita mulai dengan membersihkan kode-kode bahasa Inggris lama di  lib/features/  terlebih  
-  dahulu dan menyiapkan struktur folder baru?  
+Berdasarkan analisis menyeluruh terhadap arsitektur, kualitas kode, pengujian, dan fitur aplikasi Absensi (E-     
+  AbsensiQu) saat ini, berikut adalah poin-poin peningkatan (improvements) yang direkomendasikan:                   
+  ──────                                                                                                            
+  ### 1. 🏗️ Arsitektur & Refactoring Kode                                                                           
+                                                                                                                    
+  • Refactoring File Monolitik (home_page.dart)                                                                     
+      • Masalah: File home_page.dart memiliki ~1.960 baris kode yang menggabungkan logika tampilan untuk 3 peran    
+      (role): Siswa, Guru, dan Admin.                                                                               
+      • Saran: Pecah menjadi file tampilan terpisah berdasarkan peran (StudentHomeView, TeacherHomeView,            
+      AdminHomeView) dan ekstrak widget kecil seperti GreetingCard, AttendanceStatusCard, dan WeeklySummaryCard ke  
+      komponen tersendiri agar kode lebih terstruktur dan mudah dirawat.                                            
+                                                                                                                    
+  ──────                                                                                                            
+  ### 2. ⚡ Pembersihan Kode Legacy & Perbaikan Warning (flutter analyze)                                           
+                                                                                                                    
+  • Pembersihan Kode Sisa Template (Dead Code)                                                                      
+      • Masalah: File di  (ai_prompt_api_client.dart, ai_prompt_transport_factory_web.dart) dan test pendukungnya   
+      tidak digunakan dalam fitur absensi serta menggunakan dart:html yang memicu peringatan lint.                  
+      • Saran: Hapus seluruh file network AI legacy tersebut.                                                       
+  • Perbaikan Deprecated API & Lint Warning                                                                         
+      • Geolocator: Penggunaan desiredAccuracy dan timeLimit pada manual_attendance_bottom_sheet.dart sudah         
+      deprecated. Perbarui dengan LocationSettings.                                                                 
+      • Color.withOpacity: Ganti method .withOpacity() yang deprecated pada Flutter SDK terbaru dengan .            
+      withValues(alpha: ...).                                                                                       
+      • Null-aware Elements: Gunakan syntax null-aware ? pada app_scaffold.dart.                                    
+                                                                                                                    
+  ──────                                                                                                            
+  ### 3. 🚀 Peningkatan Fitur Aplikasi (Feature Enhancements)                                                       
+                                                                                              
+                                                                             
+                                                                                           
+  • Ekspor Laporan Presensi (PDF / Excel)                                                                           
+      • Tambahkan fitur ekspor rekap presensi bulanan/mingguan untuk Guru dan Admin ke dalam format PDF atau        
+      Spreadsheet (.xlsx).                                                                                          
+  • Notifikasi Pengingat (Firebase Cloud Messaging - FCM)                                                           
+      • Integrasikan FCM untuk mengirimkan push notification pengingat presensi pagi (misal pukul 06.45 WIB) kepada 
+      siswa yang belum melakukan check-in.                                                                          
+                                                                                                                    
+  ──────                                                                                                            
+  ### 4. 🔐 Keamanan & Aturan Database (Firestore Security Rules)                                                   
+                                                                                                                    
+  • Penerapan firestore.rules                                                                                       
+      • Saat ini keamanan data bertumpu pada validasi client-side.                                                  
+      • Saran: Buat file firestore.rules untuk memverifikasi bahwa:                                                 
+          • Siswa hanya dapat membaca dan menulis data presensi milik mereka sendiri (users/{uid}/attendance/{date}).
+          • Hanya role guru dan admin yang dapat membaca atau mengubah status presensi seluruh siswa di kelasnya.   
+                                                                                                            
+  ──────                                                                                                            
+  ### 5. 🧪 Pengujian Otomatis (Automated Testing)                                                                  
+                                                                                                                    
+  • Cakupan Unit Test & Provider Test                                                                               
+      • Saat ini pengujian baru mencakup 1 test widget dasar di widget_test.dart.                                   
+      • Saran: Tambahkan unit test untuk service & provider utama:                                                  
+          • holiday_service.dart (pengujian fetching API hari libur nasional).                                      
+          • location_service.dart (pengujian kalkulasi jarak GPS).                                                  
+          • attendance_repository_impl.dart (mocking Firestore call).                                               
+                                                                                                                    
+                                                                                                                    
+  ──────                                                                                                            
+  ### 6. 🎨 UI/UX & Pengalaman Pengguna                                                                             
+                                                                                                                    
+                                                                              
+                                                                                                    
+  Sebagai catatan tambahan, dari hasil eksekusi pengujian otomatis (flutter test), ditemukan juga bahwa pengujian di
+  **widget_test.dart** saat ini mengalami kegagalan (error):                                                        
+                                                                                                                    
+    Tried to use a provider that is in error state:                                                                 
+    [core/no-app] No Firebase App '[DEFAULT]' has been created - call Firebase.initializeApp()                      
+                                                                                                                    
+  ### 🛠️ Poin Perbaikan Pengujian Tambahan:                                                                         
+                                                                                                                    
+  • Mocking Firebase pada Unit & Widget Test:                                                                       
+      • widget_test.dart mencoba me-render AbsensiApp yang mengakses authProvider -> AuthRepositoryImpl ->          
+      FirebaseAuth.instance. Namun, pada environment unit/widget test Flutter, instance Firebase belum              
+      diinisialisasi atau di-mock.                                                                                  
+      • Solusi: Lakukakan override provider authRepositoryProvider di unit/widget test dengan MockAuthRepository    
+      atau berikan mock implementation (seperti fake_cloud_firestore dan firebase_auth_mocks) agar pengujian        
+      tampilan UI tidak bergantung pada Firebase SDK asli.     

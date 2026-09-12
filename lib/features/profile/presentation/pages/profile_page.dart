@@ -15,6 +15,9 @@ import '../../../../shared/widgets/app_top_bar.dart';
 import '../../../attendance/presentation/widgets/manual_attendance_bottom_sheet.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../widgets/edit_profile_bottom_sheet.dart';
+import '../../../school/presentation/providers/school_provider.dart';
+
+import '../widgets/edit_school_info_bottom_sheet.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -68,21 +71,92 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
   // Get two-letter initials for avatar fallback
   String _getInitials(String name) {
-    final parts = name.trim().split(' ');
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return 'U';
+    final parts = cleanName.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     if (parts.length >= 2) {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
-    if (name.isNotEmpty) {
-      return name.substring(0, name.length >= 2 ? 2 : 1).toUpperCase();
-    }
-    return 'U';
+    return cleanName.substring(0, cleanName.length >= 2 ? 2 : 1).toUpperCase();
   }
 
-  void _handleNavigation(BuildContext context, AppBottomDestination destination, bool isGuru) {
+  void _showResetPasswordDialog(
+    BuildContext context,
+    WidgetRef ref,
+    String email,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.appColors.surface,
+        title: const Text(
+          'Reset Kata Sandi',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Kirimkan tautan pengaturan ulang kata sandi ke email akun Anda ($email)? Anda dapat membuat kata sandi baru melalui email tersebut.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.appColors.primary,
+              foregroundColor: context.appColors.textInverse,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await ref
+                    .read(authRepositoryProvider)
+                    .sendPasswordResetEmail(email);
+                if (context.mounted) {
+                  AppToast.showSuccess(
+                    context,
+                    title: 'Email Terkirim!',
+                    message:
+                        'Tautan reset kata sandi telah dikirim ke $email. Silakan periksa kotak masuk atau spam email Anda.',
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  AppToast.showError(
+                    context,
+                    title: 'Gagal Mengirim Email',
+                    message: e.toString().replaceAll('Exception: ', ''),
+                  );
+                }
+              }
+            },
+            child: const Text('Kirim Tautan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleNavigation(
+    BuildContext context,
+    AppBottomDestination destination,
+    bool isGuru,
+    bool isAdmin,
+  ) {
     if (destination == AppBottomDestination.profile) return;
 
     if (destination == AppBottomDestination.home) {
       Navigator.pushReplacementNamed(context, RouteNames.home);
+      return;
+    }
+
+    if (destination == AppBottomDestination.laporan) {
+      Navigator.pushReplacementNamed(context, RouteNames.laporan);
+      return;
+    }
+
+    if (destination == AppBottomDestination.database) {
+      Navigator.pushReplacementNamed(context, RouteNames.database);
       return;
     }
 
@@ -165,6 +239,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final user = authState is Authenticated ? authState.user : null;
     final currentRole = user?.role ?? 'siswa';
     final isSiswa = currentRole == 'siswa';
+    final isAdmin = user?.isAdmin ?? false;
     final displayName = user?.displayName ?? 'Fadhil Rabbani';
     final userEmail = user?.email ?? 'rabbani@sekolah.sch.id';
 
@@ -176,7 +251,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       bottomNavigationBar: AppBottomNavBar(
         selectedDestination: AppBottomDestination.profile,
         isGuru: !isSiswa,
-        onDestinationSelected: (destination) => _handleNavigation(context, destination, !isSiswa),
+        isAdmin: isAdmin,
+        onDestinationSelected: (destination) => _handleNavigation(context, destination, !isSiswa, isAdmin),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(
@@ -263,109 +339,109 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ),
             const SizedBox(height: AppSpacing.md),
 
-            // ==========================================
-            // 2. CARD INFORMASI UTAMA
-            // ==========================================
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Informasi Utama',
-                    style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                          color: context.appColors.textSecondary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  if (isSiswa) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'NISN',
-                                style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                                      color: context.appColors.textMuted,
-                                    ),
-                              ),
-                              const SizedBox(height: 2),
-                              _buildValueText('0054321987'),
-                            ],
+            if (!isAdmin) ...[
+              // ==========================================
+              // 2. CARD INFORMASI UTAMA
+              // ==========================================
+              AppCard(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Informasi Utama',
+                      style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                            color: context.appColors.textSecondary,
+                            fontWeight: FontWeight.bold,
                           ),
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Kelas',
-                                style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                                      color: context.appColors.textMuted,
-                                    ),
-                              ),
-                              const SizedBox(height: 2),
-                              _buildValueText('XI RPL 1'),
-                            ],
-                          ),
-                        ),
-                      ],
                     ),
-                  ] else ...[
+                    const SizedBox(height: AppSpacing.md),
+                    if (isSiswa) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'NISN',
+                                  style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                                        color: context.appColors.textMuted,
+                                      ),
+                                ),
+                                const SizedBox(height: 2),
+                                _buildValueText(
+                                  user?.extraField != null
+                                      ? user!.extraField!
+                                          .replaceFirst('NISN:', '')
+                                          .replaceFirst('NISN', '')
+                                          .trim()
+                                      : null,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Kelas',
+                                  style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                                        color: context.appColors.textMuted,
+                                      ),
+                                ),
+                                const SizedBox(height: 2),
+                                _buildValueText(user?.fullClassLabel ?? user?.roomName),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'NIP / Jabatan / Mapel',
+                            style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                                  color: context.appColors.textMuted,
+                                ),
+                          ),
+                          const SizedBox(height: 2),
+                          _buildValueText(user?.extraField),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.md),
+                    const Divider(height: 1),
+                    const SizedBox(height: AppSpacing.md),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'NIP / NUPTK',
+                          'Tanggal Lahir',
                           style: Theme.of(context).textTheme.labelSmall!.copyWith(
                                 color: context.appColors.textMuted,
                               ),
                         ),
                         const SizedBox(height: 2),
-                        _buildValueText('198205122008011003'),
-                        const SizedBox(height: AppSpacing.md),
-                        const Divider(height: 1),
-                        const SizedBox(height: AppSpacing.md),
-                        Row(
-                          children: [
-                            Icon(Icons.book_outlined, size: 14, color: context.appColors.textMuted),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Mapel Ajar',
-                              style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                                    color: context.appColors.textMuted,
-                                  ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        _buildValueText('Matematika Peminatan'),
+                        _buildValueText(user?.birthDate),
                       ],
                     ),
                   ],
-                  const SizedBox(height: AppSpacing.md),
-                  const Divider(height: 1),
-                  const SizedBox(height: AppSpacing.md),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Tanggal Lahir',
-                        style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                              color: context.appColors.textMuted,
-                            ),
-                      ),
-                      const SizedBox(height: 2),
-                      _buildValueText(user?.birthDate ?? (isSiswa ? '12 Oktober 2008' : '12 Mei 1982')),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.md),
+            ],
+
+            // ==========================================
+            // CARD INFORMASI SEKOLAH (Admin Only)
+            // ==========================================
+            if (isAdmin) ...[
+              _buildSchoolInfoCard(context, ref),
+              const SizedBox(height: AppSpacing.md),
+            ],
 
             // ==========================================
             // 3. CARD INFORMASI DETAIL
@@ -385,56 +461,60 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                   const SizedBox(height: AppSpacing.md),
                   
                   // Alamat
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.location_on_outlined, size: 18, color: context.appColors.textMuted),
-                      const SizedBox(width: AppSpacing.xs),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Alamat Tinggal',
-                              style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                                    color: context.appColors.textMuted,
-                                  ),
-                            ),
-                            const SizedBox(height: 2),
-                             _buildValueText(user?.address ?? 'Jl. Jenderal Sudirman No. 45, Kota Bandung'),
-                          ],
+                  if (!isAdmin) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.location_on_outlined, size: 18, color: context.appColors.textMuted),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Alamat Tinggal',
+                                style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                                      color: context.appColors.textMuted,
+                                    ),
+                              ),
+                              const SizedBox(height: 2),
+                              _buildValueText(user?.address),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
                   
-                  // Jurusan (Siswa) or Jabatan (Guru)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.workspace_premium_outlined, size: 18, color: context.appColors.textMuted),
-                      const SizedBox(width: AppSpacing.xs),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isSiswa ? 'Jurusan' : 'Jabatan / Peran',
-                              style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                                    color: context.appColors.textMuted,
-                                  ),
-                            ),
-                            const SizedBox(height: 2),
-                             _buildValueText(user?.extraField ?? (isSiswa ? 'Rekayasa Perangkat Lunak' : 'Wali Kelas & Staf Kurikulum')),
-                          ],
+                  // Jurusan (Hanya untuk Siswa)
+                  if (isSiswa) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.workspace_premium_outlined, size: 18, color: context.appColors.textMuted),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Jurusan',
+                                style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                                      color: context.appColors.textMuted,
+                                    ),
+                              ),
+                              const SizedBox(height: 2),
+                              _buildValueText(user?.extraField),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  const Divider(height: 1),
-                  const SizedBox(height: AppSpacing.md),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    const Divider(height: 1),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
 
                   // Kontak
                   if (isSiswa) ...[
@@ -462,7 +542,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                                       ),
                                 ),
                                 const SizedBox(height: 2),
-                                 _buildValueText(_formatPhoneNumber(user?.phoneNumber ?? '0812-3456-7890')),
+                                 _buildValueText(
+                                    (user?.phoneNumber?.isNotEmpty == true)
+                                        ? _formatPhoneNumber(user!.phoneNumber)
+                                        : null),
                               ],
                             ),
                           ),
@@ -487,7 +570,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                                     ),
                               ),
                               const SizedBox(height: 2),
-                               _buildValueText(_formatPhoneNumber(user?.phoneNumber ?? '0857-9988-1122')),
+                              _buildValueText(
+                                  (user?.phoneNumber?.isNotEmpty == true)
+                                      ? _formatPhoneNumber(user!.phoneNumber)
+                                      : null),
                             ],
                           ),
                         ),
@@ -574,30 +660,42 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
                   // Ubah Kata Sandi
                   InkWell(
-                    onTap: () {},
+                    onTap: user?.email == null
+                        ? null
+                        : () => _showResetPasswordDialog(
+                            context, ref, user!.email),
                     borderRadius: BorderRadius.circular(AppRadius.small),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8.0, horizontal: 4.0),
                       child: Row(
                         children: [
-                          Icon(Icons.lock_reset_rounded, color: context.appColors.textSecondary),
+                          Icon(Icons.lock_reset_rounded,
+                              color: context.appColors.textSecondary),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Text(
                               'Ubah Kata Sandi',
-                              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium!
+                                  .copyWith(
                                     fontWeight: FontWeight.w600,
                                   ),
                             ),
                           ),
                           Text(
-                            'Ganti PIN',
-                            style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                            'Reset via email',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall!
+                                .copyWith(
                                   color: context.appColors.textMuted,
                                 ),
                           ),
                           const SizedBox(width: 4),
-                          Icon(Icons.chevron_right_rounded, size: 18, color: context.appColors.textMuted),
+                          Icon(Icons.chevron_right_rounded,
+                              size: 18, color: context.appColors.textMuted),
                         ],
                       ),
                     ),
@@ -671,6 +769,115 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSchoolInfoCard(BuildContext context, WidgetRef ref) {
+    final schoolInfoAsync = ref.watch(schoolInfoProvider);
+
+    return schoolInfoAsync.when(
+      loading: () => const AppCard(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.lg),
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      ),
+      error: (err, _) => AppCard(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Text('Gagal memuat informasi sekolah: $err'),
+        ),
+      ),
+      data: (schoolInfo) {
+        return AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Informasi Sekolah',
+                    style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                          color: context.appColors.textSecondary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.edit_outlined, size: 18, color: context.appColors.primary),
+                    onPressed: () => EditSchoolInfoBottomSheet.show(context, schoolInfo),
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              
+              // Nama Sekolah
+              _buildSchoolRow(context, Icons.school_outlined, 'Nama Sekolah', schoolInfo.name),
+              const SizedBox(height: AppSpacing.md),
+              
+              // NPSN
+              _buildSchoolRow(context, Icons.tag, 'Nomor NPSN', schoolInfo.npsn),
+              const SizedBox(height: AppSpacing.md),
+              
+              // Jam Masuk
+              _buildSchoolRow(context, Icons.access_time, 'Jam Masuk Sekolah', schoolInfo.startTime),
+              const SizedBox(height: AppSpacing.md),
+              
+              // Batas Masuk
+              _buildSchoolRow(context, Icons.access_time_filled_rounded, 'Batas Masuk Sekolah', schoolInfo.lateTime),
+              const SizedBox(height: AppSpacing.md),
+              
+              // Lokasi
+              _buildSchoolRow(
+                context,
+                Icons.location_searching,
+                'Lokasi Sekolah',
+                '${schoolInfo.latitude}, ${schoolInfo.longitude}',
+              ),
+              const SizedBox(height: AppSpacing.md),
+              
+              // Alamat
+              _buildSchoolRow(context, Icons.location_on_outlined, 'Alamat Sekolah', schoolInfo.address),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSchoolRow(BuildContext context, IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: context.appColors.textMuted),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                      color: context.appColors.textMuted,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                      color: context.appColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

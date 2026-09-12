@@ -1,51 +1,42 @@
-# English Learning
+# Absensi
 
-A mobile-first Flutter app for focused daily English practice, including tiny
-lessons, speaking support, roleplay, vocabulary, and AI-assisted learning.
+Aplikasi Flutter untuk absensi sekolah SMK TI Bazma.
 
-## UI architecture
+Project ini memakai Firebase Auth, Cloud Firestore, Riverpod, Geolocator, dan integrasi API hari libur Indonesia dari `https://libur.deno.dev/`.
 
-The app uses a feature-first structure. Shared visual rules live in
-`lib/core/theme`, reusable interface components live in `lib/shared/widgets`,
-and feature-specific pages and widgets stay inside `lib/features`.
+## Dokumentasi
 
-Design tokens are centralized in:
+- [Project overview](docs/README.md)
+- [Architecture](docs/architecture.md)
+- [Attendance and holidays](docs/attendance-and-holidays.md)
 
-- `app_colors.dart`
-- `app_typography.dart`
-- `app_spacing.dart`
-- `app_radius.dart`
-- `app_shadows.dart`
-- `app_theme.dart`
+## Fitur Utama
 
-New screens should use `AppScaffold`, `AppCard`, the shared button variants,
-`SectionHeader`, and `AppBottomNavBar` instead of defining local visual styles.
-The current project does not bundle a custom font asset, so the theme uses the
-platform font. Plus Jakarta Sans can be added later as a bundled asset without
-changing individual widgets.
+- Login dan auth gate.
+- Home dengan status presensi hari ini.
+- Presensi manual untuk hadir, sakit, dan izin.
+- Validasi lokasi saat check-in hadir.
+- Riwayat presensi bulanan dengan kalender.
+- Tampilan daftar siswa untuk role guru.
+- Penanda hari libur nasional/cuti bersama.
+- Penonaktifan presensi saat tanggal merah.
 
-## Current screens
+## Struktur Singkat
 
-- Home
-- AI Coach practice menu
-- Tiny Lesson with Vocabulary, Phrases, and Tips tabs
-- Slang Hang with generated two-person dialogue and expression notes
+```txt
+lib/
+  core/
+  features/
+    attendance/
+    auth/
+    home/
+    profile/
+  shared/
+```
 
-Tiny Lesson generates personalized content from a required proficiency level
-and usage context or theme through the configured backend Worker. It starts
-without dummy lesson data and renders learning content only after a successful
-AI response. Gemini is never called directly from Flutter. See
-[`docs/ai-endpoints.md`](docs/ai-endpoints.md) for the request contract and
-security boundary.
+## Manual Verification
 
-Learn, Lexicon, and Profile remain planned destinations. Their existing
-coming-soon behavior is preserved. The center AI Coach action opens the
-practice-mode menu; Tiny Lesson is entered from that menu.
-
-## Manual verification
-
-This repository intentionally avoids automatic Flutter builds and test runs on
-limited hardware. To verify locally when appropriate:
+Command berat tidak dijalankan otomatis di project ini. Jalankan manual bila dibutuhkan:
 
 ```sh
 flutter analyze
